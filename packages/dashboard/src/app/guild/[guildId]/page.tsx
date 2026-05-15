@@ -25,62 +25,109 @@ type BotActionLog = { id: string; action: string; targetId?: string; targetName?
 
 type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
 
-function MemberDetail({ member, onClose, logs }: { member: Member; onClose: () => void; logs: BotActionLog[] }) {
+function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string }) {
   const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
   const isMuted = member.timedOutUntil && new Date(member.timedOutUntil) > new Date();
+  const [detailView, setDetailView] = useState<"overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages">("overview");
+  const [detailData, setDetailData] = useState<{ botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any } | null>(null);
+  const [messages, setMessages] = useState<any[] | null>(null);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
-  return (
-    <div className="bg-dark-800 rounded-xl border border-dark-700 p-4 h-fit">
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-discord flex items-center justify-center text-lg font-bold">
-            {member.username.charAt(0).toUpperCase()}
+  const loadDetails = async () => {
+    if (!detailData) {
+      const data = await apiFetch<{ member: Member; botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any }>(`/api/members/${guildId}/${member.discordId}/details`);
+      setDetailData(data);
+    }
+  };
+
+  const loadMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const data = await apiFetch<{ messages: any[] }>(`/api/members/${guildId}/${member.discordId}/messages`);
+      setMessages(data.messages || []);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingMessages(false);
+  };
+
+  const handleViewChange = async (view: "overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages") => {
+    if (view !== "overview") await loadDetails();
+    if (view === "messages" && !messages) loadMessages();
+    setDetailView(view);
+  };
+
+  const mutes = detailData?.botLogs.filter(l => l.action === "MUTE") || logs.filter(l => l.action === "MUTE");
+
+  const actionLabels: Record<string, string> = {
+    MUTE: "🔇 Mute", UNMUTE: "🔊 Mute retiré", BAN: "🚫 Banni", UNBAN: "✅ Débanni",
+    KICK: "👢 Exclu", TRUST_ADD: "✓ Fiable ajouté", TRUST_REMOVE: "✗ Fiable retiré",
+    QUARANTINE: "⚠️ Quarantaine", CONFIG_CHANGE: "⚙️ Config", LOCKDOWN_ON: "🔒 Lockdown",
+  };
+
+  const getActionIcon = (action: string) => {
+    const icons: Record<string, string> = {
+      MUTE: "🔇", UNMUTE: "🔊", BAN: "🚫", UNBAN: "✅", KICK: "👢",
+      TRUST_ADD: "✓", TRUST_REMOVE: "✗", QUARANTINE: "⚠️", LOCKDOWN_ON: "🔒", LOCKDOWN_OFF: "🔓",
+    };
+    return icons[action] || "📋";
+  };
+
+  const renderOverview = () => (
+    <>
+      <div className="space-y-2">
+        <button onClick={() => handleViewChange("risk")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-3 w-full text-left transition">
+          <div className="flex justify-between items-center mb-1">
+            <span className="text-gray-400 text-xs uppercase tracking-wider">Score de risque</span>
+            <span className={`text-xl font-bold ${riskColor}`}>{member.riskScore}/100</span>
           </div>
-          <div>
-            <h3 className="font-bold">{member.username}</h3>
-            <p className="text-xs text-gray-400">ID: {member.discordId}</p>
+          <div className="h-1.5 bg-dark-700 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${member.riskScore >= 61 ? "bg-red-500" : member.riskScore >= 31 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${member.riskScore}%` }} />
           </div>
-        </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-white">
-          <X className="w-4 h-4" />
         </button>
-      </div>
 
-      <div className="space-y-3">
-        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
-          <span className="text-gray-400 text-sm">Score de risque</span>
-          <span className={`font-bold ${riskColor}`}>{member.riskScore}/100</span>
-        </div>
-        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
-          <span className="text-gray-400 text-sm">Messages</span>
-          <span className="font-medium">{member.messageCount}</span>
-        </div>
-        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
-          <span className="text-gray-400 text-sm">Avertissements</span>
-          <span className="font-medium">{member.warnCount}</span>
-        </div>
-        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
-          <span className="text-gray-400 text-sm">Liens suspects</span>
-          <span className="font-medium">{member.linkCount}</span>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => handleViewChange("messages")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
+            <p className="text-gray-400 text-xs">Messages</p>
+            <p className="font-bold text-lg">{member.messageCount}</p>
+          </button>
+          <button onClick={() => handleViewChange("warns")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
+            <p className="text-gray-400 text-xs">Warns</p>
+            <p className={`font-bold text-lg ${member.warnCount > 0 ? "text-orange-400" : ""}`}>{member.warnCount}</p>
+          </button>
+          <button onClick={() => handleViewChange("links")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
+            <p className="text-gray-400 text-xs">Liens suspects</p>
+            <p className={`font-bold text-lg ${member.linkCount > 0 ? "text-red-400" : ""}`}>{member.linkCount}</p>
+          </button>
+          <div className="bg-dark-700/30 rounded-lg p-2 text-center">
+            <p className="text-gray-400 text-xs">Jours sur serveur</p>
+            <p className="font-bold text-lg">{Math.floor((Date.now() - new Date(member.joinedAt).getTime()) / (1000 * 60 * 60 * 24))}</p>
+          </div>
         </div>
       </div>
 
       <div className="mt-4 pt-4 border-t border-dark-700">
         <h4 className="text-sm font-medium mb-2">Statut</h4>
         <div className="flex flex-wrap gap-2">
-          {isMuted && (
-            <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full text-xs">
-              Mute {Math.ceil((new Date(member.timedOutUntil!).getTime() - Date.now()) / 60000)}min
-            </span>
-          )}
+          {isMuted ? (
+            <button onClick={() => handleViewChange("mutes")} className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition">
+              <VolumeX className="w-3 h-3" />
+              Mute <span className="font-bold">{Math.ceil((new Date(member.timedOutUntil!).getTime() - Date.now()) / 60000)}min</span>
+            </button>
+          ) : mutes.length > 0 ? (
+            <button onClick={() => handleViewChange("mutes")} className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition">
+              <VolumeX className="w-3 h-3" />
+              {mutes.length} mute(s) passé(s)
+            </button>
+          ) : null}
           {member.quarantined && (
-            <span className="bg-red-500/20 text-red-400 px-2 py-1 rounded-full text-xs">
-              Banni
+            <span className="bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1">
+              <Ban className="w-3 h-3" /> Banni
             </span>
           )}
           {member.trusted && (
-            <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs">
-              Fiable
+            <span className="bg-green-500/20 text-green-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1">
+              <CheckCircle className="w-3 h-3" /> Fiable
             </span>
           )}
         </div>
@@ -88,17 +135,237 @@ function MemberDetail({ member, onClose, logs }: { member: Member; onClose: () =
 
       {logs.length > 0 && (
         <div className="mt-4 pt-4 border-t border-dark-700">
-          <h4 className="text-sm font-medium mb-2">Historique ({logs.length})</h4>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
+          <button onClick={() => handleViewChange("events")} className="text-sm font-medium mb-3 text-discord hover:underline">
+            Voir tout l'historique ({logs.length} actions)
+          </button>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
             {logs.slice(0, 5).map((log) => (
-              <div key={log.id} className="text-xs p-2 bg-dark-700/30 rounded">
-                <span className="text-gray-300">{log.action}</span>
-                {log.reason && <span className="text-gray-400 ml-1">- {log.reason}</span>}
+              <div key={log.id} className="flex items-start gap-2 text-xs p-2 bg-dark-700/30 rounded-lg">
+                <span className="text-lg">{getActionIcon(log.action)}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-gray-200">{actionLabels[log.action] || log.action}</span>
+                  {log.reason && <p className="text-gray-500 truncate">{log.reason}</p>}
+                  <p className="text-gray-600 text-[10px]">{new Date(log.createdAt).toLocaleString("fr-FR")}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+    </>
+  );
+
+  const renderMutes = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Historique des mutes</h4>
+      {mutes.length === 0 ? (
+        <p className="text-gray-500 text-sm">Aucun mute</p>
+      ) : (
+        mutes.map((mute) => (
+          <div key={mute.id} className="bg-dark-700/30 rounded-lg p-3">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-yellow-400 font-medium">🔇 Mute</span>
+              <span className="text-gray-500 text-xs">{new Date(mute.createdAt).toLocaleString("fr-FR")}</span>
+            </div>
+            {mute.details?.duration && (
+              <p className="text-sm">Durée: {mute.details.duration} minute(s)</p>
+            )}
+            {mute.reason && (
+              <p className="text-sm text-gray-400">Raison: {mute.reason}</p>
+            )}
+            <p className="text-xs text-gray-600 mt-1">
+              Fin: <span title={new Date(mute.details?.endDate).toLocaleString("fr-FR")}>
+                {mute.details?.endDate && new Date(mute.details.endDate) > new Date() 
+                  ? `dans ${Math.ceil((new Date(mute.details.endDate).getTime() - Date.now()) / 60000)}min`
+                  : "expiré"}
+              </span>
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  const renderWarns = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Avertissements & Sanctions</h4>
+      {detailData?.securityEvents.length === 0 && logs.filter(l => l.action === "MUTE").length === 0 ? (
+        <p className="text-gray-500 text-sm">Aucun avertissement</p>
+      ) : (
+        <>
+          {logs.filter(l => l.action === "MUTE").map((log) => (
+            <div key={log.id} className="bg-dark-700/30 rounded-lg p-3 border-l-2 border-yellow-500">
+              <div className="flex justify-between items-start mb-1">
+                <span className="text-yellow-400 font-medium">🔇 Mute</span>
+                <span className="text-gray-500 text-xs">{new Date(log.createdAt).toLocaleString("fr-FR")}</span>
+              </div>
+              {log.reason && <p className="text-sm text-gray-400">{log.reason}</p>}
+            </div>
+          ))}
+          {detailData?.securityEvents.map((event) => (
+            <div key={event.id} className="bg-dark-700/30 rounded-lg p-3 border-l-2 border-red-500">
+              <div className="flex justify-between items-start mb-1">
+                <span className="text-red-400 font-medium">{event.type?.replace(/_/g, " ")}</span>
+                <span className="text-gray-500 text-xs">{new Date(event.createdAt).toLocaleString("fr-FR")}</span>
+              </div>
+              <p className="text-sm text-gray-400">{event.description}</p>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+
+  const renderLinks = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Liens suspects détectés</h4>
+      {detailData?.detectedLinks.length === 0 ? (
+        <p className="text-gray-500 text-sm">Aucun lien suspect</p>
+      ) : (
+        detailData?.detectedLinks.map((link) => (
+          <div key={link.id} className="bg-dark-700/30 rounded-lg p-3">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-red-400 font-medium truncate">{link.domain}</span>
+              <span className="text-gray-500 text-xs">{new Date(link.createdAt).toLocaleString("fr-FR")}</span>
+            </div>
+            <p className="text-xs text-gray-400 truncate" title={link.url}>{link.url}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Raison: {link.reason} • Confiance: {Math.round(link.confidence * 100)}%
+            </p>
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  const renderRisk = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Détail du score de risque</h4>
+      
+      <div className="bg-dark-700/30 rounded-lg p-4 text-center">
+        <p className="text-gray-400 text-sm">Score total</p>
+        <p className={`text-3xl font-bold ${riskColor}`}>{member.riskScore}/100</p>
+      </div>
+
+      {detailData?.riskScores?.factors && (
+        <div className="space-y-2">
+          {Object.entries(detailData.riskScores.factors as Record<string, number>).map(([factor, value]) => (
+            <div key={factor} className="flex justify-between items-center bg-dark-700/30 rounded-lg p-2">
+              <span className="text-gray-400 text-sm capitalize">{factor.replace(/([A-Z])/g, ' $1').trim()}</span>
+              <span className={`font-medium ${value > 20 ? "text-red-400" : value > 10 ? "text-yellow-400" : "text-green-400"}`}>
+                {value} pts
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="text-xs text-gray-500 mt-4">
+        <p>Le score est calculé à partir de :</p>
+        <ul className="list-disc list-inside mt-1">
+          <li>Âge du compte</li>
+          <li>Nombre de messages</li>
+          <li>Liens suspects partagés</li>
+          <li>Avertissements reçus</li>
+          <li>Comportement récent</li>
+        </ul>
+      </div>
+    </div>
+  );
+
+  const renderMessages = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Messages récents</h4>
+      
+      {loadingMessages && (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-discord"></div>
+          <span className="ml-3 text-gray-400">Chargement des messages...</span>
+        </div>
+      )}
+
+      {!loadingMessages && messages?.length === 0 && (
+        <p className="text-gray-500 text-sm">Aucun message trouvé</p>
+      )}
+
+      {!loadingMessages && messages && messages.length > 0 && (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {messages.map((msg) => (
+            <div key={msg.id} className="bg-dark-700/30 rounded-lg p-3">
+              <div className="flex justify-between items-start mb-1">
+                <span className="text-green-400 text-xs">#{msg.channelName}</span>
+                <span className="text-gray-500 text-xs">{new Date(msg.createdAt).toLocaleString("fr-FR")}</span>
+              </div>
+              <p className="text-sm text-gray-200 whitespace-pre-wrap break-words">
+                {msg.content.length > 200 ? msg.content.slice(0, 200) + "..." : msg.content || <em className="text-gray-500">[Message vide ou média]</em>}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderEvents = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Historique complet</h4>
+      <div className="space-y-2 max-h-96 overflow-y-auto">
+        {logs.map((log) => (
+          <div key={log.id} className="bg-dark-700/30 rounded-lg p-2 flex items-start gap-2">
+            <span className="text-lg">{getActionIcon(log.action)}</span>
+            <div className="flex-1 min-w-0">
+              <span className="font-medium text-gray-200 text-sm">{actionLabels[log.action] || log.action}</span>
+              {log.reason && <p className="text-gray-500 text-xs truncate">{log.reason}</p>}
+              <p className="text-gray-600 text-[10px]">{new Date(log.createdAt).toLocaleString("fr-FR")}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-dark-800 rounded-xl border border-dark-700 p-4 h-fit max-h-[80vh] overflow-y-auto">
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-discord to-purple-600 flex items-center justify-center text-xl font-bold">
+            {member.username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">{member.username}</h3>
+            <p className="text-xs text-gray-500">ID: {member.discordId}</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-white p-1">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {detailView === "overview" && renderOverview()}
+      {detailView === "mutes" && renderMutes()}
+      {detailView === "warns" && renderWarns()}
+      {detailView === "links" && renderLinks()}
+      {detailView === "risk" && renderRisk()}
+      {detailView === "messages" && renderMessages()}
+      {detailView === "events" && renderEvents()}
     </div>
   );
 }
@@ -286,7 +553,7 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
           </div>
           {selectedMember && (
             <div className="w-80">
-              <MemberDetail member={selectedMember} onClose={() => setSelectedMember(null)} logs={memberActions} />
+              <MemberDetail member={selectedMember} onClose={() => setSelectedMember(null)} logs={memberActions} guildId={guildId} />
             </div>
           )}
         </div>

@@ -111,11 +111,20 @@ export async function modActionsRoutes(app: FastifyInstance) {
 
       if (sendDm) {
         try {
-          const reasonText = reason ? `\n📝 **Raison:** ${reason}` : "";
-          const endDate = new Date(Date.now() + durationMs).toLocaleString("fr-FR", { 
-            day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" 
+          const endTimestamp = Math.floor((Date.now() + durationMs) / 1000);
+          await member.send({
+            embeds: [{
+              color: 0xFBBF24,
+              title: "⏱️ Tu as été mute",
+              description: `**Serveur:** ${guild.name}`,
+              fields: [
+                { name: "🕐 Durée", value: `${duration} minute(s)`, inline: true },
+                { name: "⏰ Fin du mute", value: `<t:${endTimestamp}:F>\n(<t:${endTimestamp}:R>)`, inline: true },
+              ],
+              footer: { text: reason ? `Raison: ${reason}` : "Merci de respecter les règles du serveur" },
+              timestamp: new Date().toISOString(),
+            }]
           });
-          await member.send(`⏰ **Tu as été mute sur ${guild.name}**\n\n🕐 **Durée:** ${duration} minute(s)\n📅 **Fin du mute:** ${endDate}${reasonText}\n\nTu peux @mentionner un modérateur si tu penses que c'est une erreur.`);
         } catch (e) {
           console.log("Impossible d'envoyer le DM");
         }
