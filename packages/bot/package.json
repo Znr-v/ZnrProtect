@@ -1,0 +1,24 @@
+{
+  "name": "@secbot/bot",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.0",
+    "@prisma/client": "^5.14.0",
+    "bullmq": "^5.7.0",
+    "ioredis": "^5.4.0",
+    "dotenv": "^16.4.0",
+    "punycode": "^2.3.1",
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.11.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.12.0"
+  }
+}

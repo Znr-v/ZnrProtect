@@ -1,0 +1,384 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Serveurs ───
+
+model Guild {
+  id                String   @id // Discord guild ID
+  name              String
+  ownerId           String
+  riskScore         Int      @default(0)
+  lockdownActive    Boolean  @default(false)
+  lockdownAt        DateTime?
+  joinedAt          DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  config            GuildConfig?
+  members           Member[]
+  securityEvents    SecurityEvent[]
+  incidents         Incident[]
+  rules             Rule[]
+  auditSnapshots    AuditSnapshot[]
+  permissionChanges PermissionChange[]
+  detectedLinks     DetectedLink[]
+  detectedSecrets   DetectedSecret[]
+  configVersions    ConfigVersion[]
+  canaryChannels    CanaryChannel[]
+  webhookEntries    WebhookEntry[]
+  inviteStats       InviteStats[]
+  botActionLogs     BotActionLog[]
+}
+
+model GuildConfig {
+  id                   String  @id @default(cuid())
+  guildId              String  @unique
+  guild                Guild   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+
+  // Anti-raid
+  raidJoinThreshold    Int     @default(10)
+  raidJoinWindow       Int     @default(60) // secondes
+  raidAutoLockdown     Boolean @default(true)
+  raidMinAccountAge    Int     @default(3) // jours
+
+  // Anti-spam
+  spamMaxMessages      Int     @default(5)
+  spamWindow           Int     @default(5) // secondes
+  spamMaxMentions      Int     @default(5)
+  spamMentionWindow    Int     @default(10) // secondes
+
+  // Anti-phishing
+  phishingEnabled      Boolean @default(true)
+  phishingCheckRedirects Boolean @default(true)
+
+  // Secrets
+  secretScanEnabled    Boolean @default(true)
+
+  // Scan bots
+  scanBots             Boolean @default(false)
+
+  // Quarantine
+  quarantineRoleId     String?
+  quarantineEnabled    Boolean @default(true)
+
+  // Trust zones
+  strictChannels       String[] @default([])
+  relaxedChannels      String[] @default([])
+
+  // Emergency
+  emergencyEnabled     Boolean @default(true)
+
+  updatedAt            DateTime @updatedAt
+}
+
+// ─── Logs d'actions du bot ───
+
+model BotActionLog {
+  id          String   @id @default(cuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  action      String
+  targetId    String?
+  targetName  String?
+  moderatorId String?
+  moderatorName String?
+  reason      String?
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([guildId, createdAt])
+}
+
+// ─── Membres ───
+
+model Member {
+  id            String    @id @default(cuid())
+  discordId     String
+  guildId       String
+  guild         Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  username      String
+  joinedAt      DateTime  @default(now())
+  accountAge    DateTime
+  riskScore     Int       @default(0)
+  quarantined   Boolean   @default(false)
+  trusted       Boolean   @default(false)
+  messageCount  Int       @default(0)
+  linkCount     Int       @default(0)
+  warnCount     Int       @default(0)
+  timedOutUntil DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  riskScores    RiskScore[]
+
+  @@unique([discordId, guildId])
+  @@index([guildId, riskScore])
+}
+
+// ─── Events de sécurité ───
+
+enum EventSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EventType {
+  RAID_DETECTED
+  SPAM_DETECTED
+  PHISHING_LINK
+  SECRET_LEAKED
+  PERMISSION_CHANGE
+  SUSPICIOUS_JOIN
+  MASS_BAN
+  MASS_KICK
+  CHANNEL_DELETE
+  WEBHOOK_CREATED
+  ROLE_ESCALATION
+  MODERATOR_ANOMALY
+  CANARY_TRIGGERED
+  EMERGENCY_ACTIVATED
+  QUARANTINE_APPLIED
+  INVITE_SUSPICIOUS
+}
+
+model SecurityEvent {
+  id          String        @id @default(cuid())
+  guildId     String
+  guild       Guild         @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  type        EventType
+  severity    EventSeverity
+  actorId     String?       // Discord user ID qui a causé l'event
+  channelId   String?
+  description String
+  metadata    Json          @default("{}")
+  createdAt   DateTime      @default(now())
+
+  incidentId  String?
+  incident    Incident?     @relation(fields: [incidentId], references: [id])
+
+  @@index([guildId, createdAt])
+  @@index([type, severity])
+}
+
+// ─── Incidents ───
+
+enum IncidentStatus {
+  NEW
+  IN_PROGRESS
+  CONTAINED
+  RESOLVED
+  FALSE_POSITIVE
+}
+
+model Incident {
+  id            String          @id @default(cuid())
+  guildId       String
+  guild         Guild           @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  title         String
+  severity      EventSeverity
+  status        IncidentStatus  @default(NEW)
+  description   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  resolvedAt    DateTime?
+  resolvedBy    String?
+
+  events        SecurityEvent[]
+  actions       IncidentAction[]
+
+  @@index([guildId, status])
+}
+
+model IncidentAction {
+  id          String   @id @default(cuid())
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  action      String   // kick, ban, quarantine, mute, delete_message, lockdown, etc.
+  targetId    String?  // Discord user ID
+  executedBy  String   // bot or moderator ID
+  reason      String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+}
+
+// ─── Risk scores ───
+
+model RiskScore {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  score     Int
+  factors   Json     // { accountAge: 20, spamRate: 15, linkRatio: 10, ... }
+  createdAt DateTime @default(now())
+
+  @@index([memberId, createdAt])
+}
+
+// ─── Règles ───
+
+model Rule {
+  id          String   @id @default(cuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  condition   Json     // { type: "join_rate", threshold: 10, window: 60 }
+  action      Json     // { type: "quarantine" } or { type: "lockdown" }
+  enabled     Boolean  @default(true)
+  shadowMode  Boolean  @default(false) // "Shadow Rules Test"
+  matchCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  matches     RuleMatch[]
+
+  @@index([guildId, enabled])
+}
+
+model RuleMatch {
+  id        String   @id @default(cuid())
+  ruleId    String
+  rule      Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  actorId   String?
+  channelId String?
+  metadata  Json     @default("{}")
+  shadow    Boolean  @default(false) // matched but not executed
+  createdAt DateTime @default(now())
+
+  @@index([ruleId, createdAt])
+}
+
+// ─── Audit ───
+
+model AuditSnapshot {
+  id        String   @id @default(cuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  snapshot  Json     // roles, channels, permissions at point in time
+  createdAt DateTime @default(now())
+
+  @@index([guildId, createdAt])
+}
+
+model PermissionChange {
+  id          String   @id @default(cuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  roleId      String
+  roleName    String
+  changeType  String   // added, removed, modified
+  permission  String
+  changedBy   String?  // user ID who made the change
+  flagged     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([guildId, createdAt])
+}
+
+// ─── Liens & secrets détectés ───
+
+model DetectedLink {
+  id          String   @id @default(cuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  url         String
+  domain      String
+  actorId     String
+  channelId   String
+  reason      String   // phishing, redirect_chain, punycode, recent_domain, etc.
+  confidence  Float    @default(0)
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([guildId, createdAt])
+  @@index([domain])
+}
+
+model DetectedSecret {
+  id          String   @id @default(cuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  actorId     String
+  channelId   String
+  secretType  String   // discord_token, api_key, jwt, private_key, etc.
+  secretHash  String   // SHA-256
+  createdAt   DateTime @default(now())
+
+  @@index([guildId, createdAt])
+}
+
+// ─── Config versioning ───
+
+model ConfigVersion {
+  id        String   @id @default(cuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  config    Json
+  changedBy String
+  changelog String?
+  createdAt DateTime @default(now())
+
+  @@index([guildId, createdAt])
+}
+
+// ─── Canary channels ───
+
+model CanaryChannel {
+  id        String   @id @default(cuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  channelId String
+  type      String   @default("honeypot") // honeypot, semi_visible
+  triggers  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([guildId, channelId])
+}
+
+// ─── Webhooks ───
+
+model WebhookEntry {
+  id          String   @id @default(cuid())
+  guildId     String
+  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  webhookId   String
+  channelId   String
+  createdBy   String?
+  name        String
+  flagged     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@unique([guildId, webhookId])
+}
+
+// ─── Invite stats ───
+
+model InviteStats {
+  id              String   @id @default(cuid())
+  guildId         String
+  guild           Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  inviteCode      String
+  inviterId       String?
+  usesTotal       Int      @default(0)
+  usesSuspicious  Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([guildId, inviteCode])
+}
+
+// ─── Dashboard users ───
+
+model DashboardUser {
+  id          String   @id @default(cuid())
+  discordId   String   @unique
+  username    String
+  avatar      String?
+  lastLoginAt DateTime @default(now())
+}
