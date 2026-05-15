@@ -4,11 +4,14 @@ export async function botLogsRoutes(app: FastifyInstance) {
   // Get logs for a guild
   app.get("/:guildId", async (request) => {
     const { guildId } = request.params as { guildId: string };
-    const { limit = "50" } = request.query as any;
+    const { limit = "50", targetId } = request.query as any;
     const prisma = (request as any).prisma;
 
+    const where: any = { guildId };
+    if (targetId) where.targetId = targetId;
+
     const logs = await prisma.botActionLog.findMany({
-      where: { guildId },
+      where,
       orderBy: { createdAt: "desc" },
       take: parseInt(limit),
     });

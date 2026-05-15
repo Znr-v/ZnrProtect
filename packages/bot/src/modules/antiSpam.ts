@@ -1,5 +1,6 @@
 import { Message } from "discord.js";
 import { BotContext } from "../index";
+import { logBotAction } from "../lib/botLogs";
 
 export async function checkSpam(ctx: BotContext, message: Message) {
   if (!message.guild) return;
@@ -54,6 +55,12 @@ export async function checkSpam(ctx: BotContext, message: Message) {
     const member = message.member;
     if (member) {
       await member.timeout(5 * 60 * 1000, "Anti-spam automatique");
+      await logBotAction(ctx.prisma, guildId, "MUTE", {
+        targetId: userId,
+        targetName: message.author.tag,
+        reason: "Anti-spam automatique",
+        details: { duration: 5, spamCount: msgCount },
+      });
     }
   } catch {}
 

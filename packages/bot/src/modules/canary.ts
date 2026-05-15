@@ -1,5 +1,6 @@
 import { Message } from "discord.js";
 import { BotContext } from "../index";
+import { logBotAction } from "../lib/botLogs";
 
 export async function checkCanary(ctx: BotContext, message: Message): Promise<boolean> {
   if (!message.guild) return false;
@@ -22,7 +23,15 @@ export async function checkCanary(ctx: BotContext, message: Message): Promise<bo
 
   // Kick the user
   try {
-    await message.member?.kick("Message dans un canal piège (canary)");
+    if (message.member) {
+      await message.member.kick("Message dans un canal piège (canary)");
+      await logBotAction(ctx.prisma, message.guild.id, "KICK", {
+        targetId: message.author.id,
+        targetName: message.author.tag,
+        reason: "Canal piège (canary) déclenché",
+        details: { channelId: message.channel.id },
+      });
+    }
   } catch {}
 
   // Update trigger count

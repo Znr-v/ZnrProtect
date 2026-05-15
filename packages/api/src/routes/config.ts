@@ -1,5 +1,15 @@
 import { FastifyInstance } from "fastify";
 
+const logBotAction = async (prisma: any, guildId: string, action: string, data: any) => {
+  try {
+    await prisma.botActionLog.create({
+      data: { guildId, action, ...data },
+    });
+  } catch (e) {
+    console.error("Failed to log bot action:", e);
+  }
+};
+
 export async function configRoutes(app: FastifyInstance) {
   // Get guild config
   app.get("/:guildId", async (request) => {
@@ -36,6 +46,11 @@ export async function configRoutes(app: FastifyInstance) {
       where: { guildId },
       create: { guildId, ...updateData },
       update: updateData,
+    });
+
+    await logBotAction(prisma, guildId, "CONFIG_CHANGE", {
+      reason: body._changelog || "Mise à jour de la configuration",
+      details: { changes: Object.keys(updateData) },
     });
 
     return { config };

@@ -1,5 +1,6 @@
 import { Message } from "discord.js";
 import { BotContext } from "../index";
+import { logBotAction } from "../lib/botLogs";
 
 // Known phishing target domains
 const LEGIT_DOMAINS = [
@@ -54,6 +55,12 @@ export async function checkPhishing(ctx: BotContext, message: Message) {
           await ctx.prisma.member.updateMany({
             where: { discordId: message.author.id, guildId: message.guild.id },
             data: { quarantined: true },
+          });
+          await logBotAction(ctx.prisma, message.guild.id, "QUARANTINE", {
+            targetId: message.author.id,
+            targetName: message.author.tag,
+            reason: "Lien de phishing détecté",
+            details: { url, domain: result.domain },
           });
         }
       } catch {}

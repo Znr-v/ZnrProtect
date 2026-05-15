@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText } from "lucide-react";
+import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { SeverityBadge } from "@/components/SeverityBadge";
@@ -25,6 +25,84 @@ type BotActionLog = { id: string; action: string; targetId?: string; targetName?
 
 type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
 
+function MemberDetail({ member, onClose, logs }: { member: Member; onClose: () => void; logs: BotActionLog[] }) {
+  const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
+  const isMuted = member.timedOutUntil && new Date(member.timedOutUntil) > new Date();
+
+  return (
+    <div className="bg-dark-800 rounded-xl border border-dark-700 p-4 h-fit">
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-discord flex items-center justify-center text-lg font-bold">
+            {member.username.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h3 className="font-bold">{member.username}</h3>
+            <p className="text-xs text-gray-400">ID: {member.discordId}</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
+          <span className="text-gray-400 text-sm">Score de risque</span>
+          <span className={`font-bold ${riskColor}`}>{member.riskScore}/100</span>
+        </div>
+        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
+          <span className="text-gray-400 text-sm">Messages</span>
+          <span className="font-medium">{member.messageCount}</span>
+        </div>
+        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
+          <span className="text-gray-400 text-sm">Avertissements</span>
+          <span className="font-medium">{member.warnCount}</span>
+        </div>
+        <div className="flex justify-between items-center p-2 bg-dark-700/50 rounded-lg">
+          <span className="text-gray-400 text-sm">Liens suspects</span>
+          <span className="font-medium">{member.linkCount}</span>
+        </div>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-dark-700">
+        <h4 className="text-sm font-medium mb-2">Statut</h4>
+        <div className="flex flex-wrap gap-2">
+          {isMuted && (
+            <span className="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full text-xs">
+              Mute {Math.ceil((new Date(member.timedOutUntil!).getTime() - Date.now()) / 60000)}min
+            </span>
+          )}
+          {member.quarantined && (
+            <span className="bg-red-500/20 text-red-400 px-2 py-1 rounded-full text-xs">
+              Banni
+            </span>
+          )}
+          {member.trusted && (
+            <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs">
+              Fiable
+            </span>
+          )}
+        </div>
+      </div>
+
+      {logs.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-dark-700">
+          <h4 className="text-sm font-medium mb-2">Historique ({logs.length})</h4>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {logs.slice(0, 5).map((log) => (
+              <div key={log.id} className="text-xs p-2 bg-dark-700/30 rounded">
+                <span className="text-gray-300">{log.action}</span>
+                {log.reason && <span className="text-gray-400 ml-1">- {log.reason}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GuildPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const [guild, setGuild] = useState<GuildData["guild"] | null>(null);
@@ -35,6 +113,8 @@ export default function GuildPage() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [logs, setLogs] = useState<BotActionLog[]>([]);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [memberActions, setMemberActions] = useState<BotActionLog[]>([]);
 
   useEffect(() => {
     apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild));
@@ -54,6 +134,12 @@ export default function GuildPage() {
       apiFetch<{ logs: BotActionLog[] }>(`/api/logs/${guildId}`).then((d) => setLogs(d.logs));
     }
   }, [tab, guildId]);
+
+  useEffect(() => {
+    if (selectedMember) {
+      apiFetch<{ logs: BotActionLog[] }>(`/api/logs/${guildId}?targetId=${selectedMember.discordId}`).then((d) => setMemberActions(d.logs));
+    }
+  }, [selectedMember, guildId]);
 
   useEffect(() => {
     if (guild) apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild));
@@ -78,6 +164,8 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
     TRUST_REMOVE: <X className="w-4 h-4 text-gray-400" />,
     LOCKDOWN_ON: <Shield className="w-4 h-4 text-red-400" />,
     LOCKDOWN_OFF: <Shield className="w-4 h-4 text-green-400" />,
+    QUARANTINE: <AlertTriangle className="w-4 h-4 text-red-400" />,
+    CONFIG_CHANGE: <Settings className="w-4 h-4 text-blue-400" />,
   };
 
   const actionLabels: Record<string, string> = {
@@ -90,6 +178,8 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
     TRUST_REMOVE: "Fiable retiré",
     LOCKDOWN_ON: "Lockdown activé",
     LOCKDOWN_OFF: "Lockdown désactivé",
+    QUARANTINE: "Mis en quarantaine",
+    CONFIG_CHANGE: "Config modifiée",
   };
 
   if (logs.length === 0) {
@@ -97,9 +187,9 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
       <div className="bg-dark-800 rounded-xl border border-dark-700 p-8 text-center">
         <ScrollText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
         <p className="text-gray-400">Aucune action enregistrée</p>
-      </div>
-    );
-  }
+</div>
+  );
+}
 
   return (
     <div className="space-y-2">
@@ -183,7 +273,24 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
       {tab === "overview" && <OverviewTab guild={guild} onRefresh={() => apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild))} />}
       {tab === "incidents" && <IncidentsTab incidents={incidents} onSelect={setSelectedIncident} />}
       {tab === "events" && <EventsTab events={events} onSelect={setSelectedEvent} />}
-      {tab === "members" && <MembersTab members={members} guildId={guildId} onRefresh={() => apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc`).then((d) => setMembers(d.members))} />}
+      {tab === "members" && (
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <MembersTab 
+              members={members} 
+              guildId={guildId} 
+              onRefresh={() => apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc`).then((d) => setMembers(d.members))}
+              selectedMember={selectedMember}
+              onSelectMember={setSelectedMember}
+            />
+          </div>
+          {selectedMember && (
+            <div className="w-80">
+              <MemberDetail member={selectedMember} onClose={() => setSelectedMember(null)} logs={memberActions} />
+            </div>
+          )}
+        </div>
+      )}
       {tab === "logs" && <LogsTab logs={logs} />}
       {tab === "config" && <ConfigTab guild={guild} config={guild.config} onUpdate={() => apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild))} />}
 
@@ -471,7 +578,7 @@ function EventsTab({ events, onSelect }: { events: Event[]; onSelect: (e: Event)
   );
 }
 
-function MembersTab({ members, guildId, onRefresh }: { members: Member[]; guildId: string; onRefresh: () => void }) {
+function MembersTab({ members, guildId, onRefresh, selectedMember, onSelectMember }: { members: Member[]; guildId: string; onRefresh: () => void; selectedMember?: Member | null; onSelectMember?: (m: Member | null) => void }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [muteModal, setMuteModal] = useState<Member | null>(null);
@@ -549,7 +656,11 @@ function MembersTab({ members, guildId, onRefresh }: { members: Member[]; guildI
               const isMuted = m.timedOutUntil && new Date(m.timedOutUntil) > new Date();
 
               return (
-                <tr key={m.id} className="border-b border-dark-700 hover:bg-dark-700/50 transition">
+                <tr 
+                  key={m.id} 
+                  className={`border-b border-dark-700 hover:bg-dark-700/50 transition cursor-pointer ${selectedMember?.discordId === m.discordId ? "bg-dark-700/50" : ""}`}
+                  onClick={() => onSelectMember?.(m)}
+                >
                   <td className="py-3 px-4 text-sm font-medium">{m.username}</td>
                   <td className="py-3 px-4">
                     <span className={`font-bold text-sm ${riskColor}`}>{m.riskScore}</span>
