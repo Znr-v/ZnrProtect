@@ -22,7 +22,7 @@ const logBotAction = async (prisma: any, guildId: string, action: string, data: 
 export async function modActionsRoutes(app: FastifyInstance) {
   app.post("/guilds/:guildId/members/:memberId/ban", async (request, reply) => {
     const { guildId, memberId } = request.params as { guildId: string; memberId: string };
-    const { reason } = (request.body as any) || {};
+    const { reason, sendDm } = (request.body as any) || {};
     const client = (request as any).client;
 
     try {
@@ -34,7 +34,24 @@ export async function modActionsRoutes(app: FastifyInstance) {
       const member = await guild.members.fetch(memberId).catch(() => null);
       if (!member) return reply.status(404).send({ error: "Membre introuvable" });
 
-      await member.ban({ reason: reason || "Banni depuis le dashboard" });
+      if (sendDm !== false) {
+        try {
+          await member.send({
+            embeds: [{
+              color: 0xEF4444,
+              title: "🚫 Tu as été banni",
+              description: `**Serveur:** ${guild.name}`,
+              fields: reason ? [{ name: "📝 Raison", value: reason, inline: false }] : [],
+              timestamp: new Date().toISOString(),
+            }]
+          });
+        } catch (e) {
+          console.log("Impossible d'envoyer le DM de ban");
+        }
+      }
+
+      const banReason = reason || "Banni depuis le dashboard";
+      await member.ban({ reason: banReason });
 
       const prisma = (request as any).prisma;
       await prisma.member.updateMany({
@@ -57,7 +74,7 @@ export async function modActionsRoutes(app: FastifyInstance) {
 
   app.post("/guilds/:guildId/members/:memberId/kick", async (request, reply) => {
     const { guildId, memberId } = request.params as { guildId: string; memberId: string };
-    const { reason } = (request.body as any) || {};
+    const { reason, sendDm } = (request.body as any) || {};
     const client = (request as any).client;
 
     try {
@@ -69,12 +86,28 @@ export async function modActionsRoutes(app: FastifyInstance) {
       const member = await guild.members.fetch(memberId).catch(() => null);
       if (!member) return reply.status(404).send({ error: "Membre introuvable" });
 
-      await member.kick(reason || "Expulsé depuis le dashboard");
+      if (sendDm !== false) {
+        try {
+          await member.send({
+            embeds: [{
+              color: 0xF97316,
+              title: "👢 Tu as été exclu",
+              description: `**Serveur:** ${guild.name}`,
+              fields: reason ? [{ name: "📝 Raison", value: reason, inline: false }] : [],
+              timestamp: new Date().toISOString(),
+            }]
+          });
+        } catch (e) {
+          console.log("Impossible d'envoyer le DM d'exclusion");
+        }
+      }
+
+      const kickReason = reason || "Expulsé depuis le dashboard";
+      await member.kick(kickReason);
 
       const prisma = (request as any).prisma;
-      await prisma.member.updateMany({
+      await prisma.member.deleteMany({
         where: { discordId: memberId, guildId },
-        data: { quarantined: true },
       });
 
       await logBotAction(prisma, guildId, "KICK", {

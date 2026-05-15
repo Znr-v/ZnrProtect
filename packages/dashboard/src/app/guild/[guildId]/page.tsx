@@ -28,7 +28,7 @@ type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
 function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string; onUpdate?: (m: Member) => void }) {
   const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
   const isMuted = member.timedOutUntil && new Date(member.timedOutUntil) > new Date();
-  const [detailView, setDetailView] = useState<"overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages" | "roles">("overview");
+  const [detailView, setDetailView] = useState<"overview" | "mutes" | "warns" | "events" | "risk" | "messages" | "roles">("overview");
   const [detailData, setDetailData] = useState<{ botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any; avatar?: string | null } | null>(null);
   const [messages, setMessages] = useState<any[] | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -75,7 +75,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
     setLoadingMessages(false);
   };
 
-  const handleViewChange = async (view: "overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages" | "roles") => {
+  const handleViewChange = async (view: "overview" | "mutes" | "warns" | "events" | "risk" | "messages" | "roles") => {
     if (view !== "overview") await loadDetails();
     if (view === "messages") loadMessages();
     if (view === "roles") loadRoles(true);
@@ -122,13 +122,13 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
             <p className="text-gray-400 text-xs">Warns</p>
             <p className={`font-bold text-lg ${member.warnCount > 0 ? "text-orange-400" : ""}`}>{member.warnCount}</p>
           </button>
-          <button onClick={() => handleViewChange("links")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
-            <p className="text-gray-400 text-xs">Liens suspects</p>
-            <p className={`font-bold text-lg ${member.linkCount > 0 ? "text-red-400" : ""}`}>{member.linkCount}</p>
+          <button onClick={() => handleViewChange("mutes")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
+            <p className="text-gray-400 text-xs">Mutes</p>
+            <p className={`font-bold text-lg ${mutes.length > 0 ? "text-yellow-400" : ""}`}>{mutes.length}</p>
           </button>
           <div className="bg-dark-700/30 rounded-lg p-2 text-center">
             <p className="text-gray-400 text-xs">Jours sur serveur</p>
-            <p className="font-bold text-lg">{Math.floor((Date.now() - new Date(member.joinedAt).getTime()) / (1000 * 60 * 60 * 24))}</p>
+            <p className="font-bold text-lg">{Math.floor((Date.now() - new Date(member.joinedAt).getTime()) / (1000 * 60 * 60 * 60))}</p>
           </div>
         </div>
       </div>
@@ -256,30 +256,6 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
     </div>
   );
 
-  const renderLinks = () => (
-    <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
-        ← Retour
-      </button>
-      <h4 className="font-medium">Liens suspects détectés</h4>
-      {detailData?.detectedLinks.length === 0 ? (
-        <p className="text-gray-500 text-sm">Aucun lien suspect</p>
-      ) : (
-        detailData?.detectedLinks.map((link) => (
-          <div key={link.id} className="bg-dark-700/30 rounded-lg p-3">
-            <div className="flex justify-between items-start mb-1">
-              <span className="text-red-400 font-medium truncate">{link.domain}</span>
-              <span className="text-gray-500 text-xs">{new Date(link.createdAt).toLocaleString("fr-FR")}</span>
-            </div>
-            <p className="text-xs text-gray-400 truncate" title={link.url}>{link.url}</p>
-            <p className="text-xs text-gray-500 mt-1">
-              Raison: {link.reason} • Confiance: {Math.round(link.confidence * 100)}%
-            </p>
-          </div>
-        ))
-      )}
-    </div>
-  );
 
   const renderRisk = () => (
     <div className="space-y-3">
@@ -571,7 +547,6 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
       {detailView === "overview" && renderOverview()}
       {detailView === "mutes" && renderMutes()}
       {detailView === "warns" && renderWarns()}
-      {detailView === "links" && renderLinks()}
       {detailView === "risk" && renderRisk()}
       {detailView === "roles" && renderRoles()}
       {detailView === "messages" && renderMessages()}
@@ -904,7 +879,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
             )}
           </div>
           <p className="text-gray-400 text-sm">
-            {guild._count.members} membres · {guild._count.securityEvents} events · {guild._count.incidents} incidents
+            {members.length} membres · {guild._count.securityEvents} events · {guild._count.incidents} incidents
           </p>
         </div>
       </div>
@@ -933,6 +908,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
               members={members} 
               guildId={guildId} 
               onRefresh={() => apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => setMembers(d.members))}
+              setMembers={setMembers}
               selectedMember={selectedMember}
               onSelectMember={setSelectedMember}
             />
@@ -1231,12 +1207,17 @@ function EventsTab({ events, onSelect }: { events: Event[]; onSelect: (e: Event)
   );
 }
 
-function MembersTab({ members, guildId, onRefresh, selectedMember, onSelectMember }: { members: Member[]; guildId: string; onRefresh: () => void; selectedMember?: Member | null; onSelectMember?: (m: Member | null) => void }) {
+function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, onSelectMember }: { members: Member[]; guildId: string; onRefresh: () => void; setMembers?: (update: Member[] | ((prev: Member[]) => Member[])) => void; selectedMember?: Member | null; onSelectMember?: (m: Member | null) => void }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [muteModal, setMuteModal] = useState<Member | null>(null);
   const [muteForm, setMuteForm] = useState({ duration: 5, reason: "", sendDm: true });
+  const [banModal, setBanModal] = useState<Member | null>(null);
+  const [banForm, setBanForm] = useState({ reason: "", sendDm: true });
+  const [kickModal, setKickModal] = useState<Member | null>(null);
+  const [kickForm, setKickForm] = useState({ reason: "", sendDm: true });
   const [searchQuery, setSearchQuery] = useState("");
+  const [showBannedOnly, setShowBannedOnly] = useState(false);
   const [filterRoles, setFilterRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [roleInput, setRoleInput] = useState("");
@@ -1287,12 +1268,18 @@ const filteredMembers = members.filter(m => {
     // AND: le membre doit avoir TOUS les rôles sélectionnés
     const matchesRoles = filterRoles.length === 0 || filterRoles.every(r => memberRoleIds.includes(r.id));
     
+    if (showBannedOnly && !m.quarantined) return false;
     return matchesSearch && matchesRoles;
   });
 
   const doAction = async (discordId: string, action: "ban" | "kick" | "timeout" | "unban" | "unmute" | "trust", data?: any) => {
     setActionLoading(discordId + action);
     setActionResult(null);
+    
+    if (action === "kick" && setMembers) {
+      setMembers(prev => prev.filter(m => m.discordId !== discordId));
+    }
+    
     try {
       let endpoint = "";
       let body = {};
@@ -1306,6 +1293,12 @@ const filteredMembers = members.filter(m => {
       } else if (action === "unmute") {
         endpoint = `/api/guilds/${guildId}/members/${discordId}/unmute`;
         body = { sendDm: data?.sendDm ?? true };
+      } else if (action === "ban") {
+        endpoint = `/api/guilds/${guildId}/members/${discordId}/ban`;
+        body = { reason: data.reason, sendDm: data.sendDm };
+      } else if (action === "kick") {
+        endpoint = `/api/guilds/${guildId}/members/${discordId}/kick`;
+        body = { reason: data.reason, sendDm: data.sendDm };
       } else if (action === "unban") {
         endpoint = `/api/guilds/${guildId}/members/${discordId}/unban`;
       } else {
@@ -1313,13 +1306,18 @@ const filteredMembers = members.filter(m => {
       }
       
       const res = await apiFetch(endpoint, { method: "POST", body });
-      setActionResult({ id: discordId, success: true, message: res.message || "Action réussie" });
+      const actionMessages: Record<string, string> = {
+        ban: "Membre banni",
+        kick: "Membre exclu",
+        timeout: "Membre muted",
+        unban: "Membre débanni",
+        unmute: "Mute retiré",
+        trust: "Statut fiable modifié"
+      };
+      const message = actionMessages[action] || "Action réussie";
+      setActionResult({ id: discordId, success: true, message });
       
-      if (action === "kick") {
-        setMembers(prev => prev.filter(m => m.discordId !== discordId));
-      } else {
-        onRefresh();
-      }
+      onRefresh();
     } catch (e: any) {
       console.error(e);
       setActionResult({ id: discordId, success: false, message: e.message || "Erreur" });
@@ -1335,13 +1333,27 @@ const filteredMembers = members.filter(m => {
     setMuteForm({ duration: 5, reason: "", sendDm: true });
   };
 
+  const handleBan = () => {
+    if (!banModal) return;
+    doAction(banModal.discordId, "ban", banForm);
+    setBanModal(null);
+    setBanForm({ reason: "", sendDm: true });
+  };
+
+  const handleKick = () => {
+    if (!kickModal) return;
+    doAction(kickModal.discordId, "kick", kickForm);
+    setKickModal(null);
+    setKickForm({ reason: "", sendDm: true });
+  };
+
   if (members.length === 0) {
     return <p className="text-gray-500">Aucun membre.</p>;
   }
 
   return (
     <>
-      <div className="flex gap-3 mb-4">
+      <div className="flex items-center gap-2 mb-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
@@ -1352,6 +1364,12 @@ const filteredMembers = members.filter(m => {
             className="w-full bg-dark-800 border border-dark-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-discord"
           />
         </div>
+        <button
+          onClick={() => setShowBannedOnly(!showBannedOnly)}
+          className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${showBannedOnly ? "bg-red-600 text-white" : "bg-dark-800 border border-dark-700 text-gray-400 hover:text-white"}`}
+        >
+          {showBannedOnly ? "✓ Bannis" : "Bannis"}
+        </button>
         {roles.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             {filterRoles.map((role) => (
@@ -1414,6 +1432,9 @@ const filteredMembers = members.filter(m => {
         <span className="text-gray-500 text-sm py-2 flex items-center gap-2">
           {filteredMembers.length} membre{filteredMembers.length !== 1 ? "s" : ""}
           {filterRoles.length > 0 && <span className="text-discord">• {members.length} total</span>}
+          {!showBannedOnly && members.filter(m => m.quarantined).length > 0 && (
+            <span className="text-red-400">• {members.filter(m => m.quarantined).length} banni(s)</span>
+          )}
         </span>
       </div>
 
@@ -1501,7 +1522,7 @@ const filteredMembers = members.filter(m => {
                             </button>
                           )}
                           <button
-                            onClick={() => doAction(m.discordId, "kick")}
+                            onClick={() => { setKickModal(m); setKickForm({ reason: "", sendDm: true }); }}
                             disabled={loading}
                             className="group relative p-2 bg-orange-600/80 hover:bg-orange-600 rounded-lg text-xs transition-all hover:scale-105"
                             title="Exclure"
@@ -1533,7 +1554,7 @@ const filteredMembers = members.filter(m => {
                             </button>
                           ) : (
                             <button
-                              onClick={() => doAction(m.discordId, "ban")}
+                              onClick={() => { setBanModal(m); setBanForm({ reason: "", sendDm: true }); }}
                               disabled={loading}
                               className="group relative p-2 bg-red-600/80 hover:bg-red-600 rounded-lg text-xs transition-all hover:scale-105"
                               title="Bannir"
@@ -1625,6 +1646,88 @@ const filteredMembers = members.filter(m => {
                 className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-4 rounded-lg transition"
               >
                 Confirmer le mute
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {banModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setBanModal(null)}>
+          <div className="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-dark-700" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-red-400">Bannir {banModal.username}</h3>
+              <button onClick={() => setBanModal(null)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-gray-400 text-sm block mb-1">Raison</label>
+                <input
+                  type="text"
+                  value={banForm.reason}
+                  onChange={(e) => setBanForm({ ...banForm, reason: e.target.value })}
+                  placeholder="Raison du bannissement..."
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="banSendDm"
+                  checked={banForm.sendDm}
+                  onChange={(e) => setBanForm({ ...banForm, sendDm: e.target.checked })}
+                  className="w-4 h-4 rounded"
+                />
+                <label htmlFor="banSendDm" className="text-sm">Envoyer un message privé</label>
+              </div>
+              <button
+                onClick={handleBan}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition"
+              >
+                Confirmer le bannissement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {kickModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setKickModal(null)}>
+          <div className="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-dark-700" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-orange-400">Exclure {kickModal.username}</h3>
+              <button onClick={() => setKickModal(null)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-gray-400 text-sm block mb-1">Raison</label>
+                <input
+                  type="text"
+                  value={kickForm.reason}
+                  onChange={(e) => setKickForm({ ...kickForm, reason: e.target.value })}
+                  placeholder="Raison de l'exclusion..."
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="kickSendDm"
+                  checked={kickForm.sendDm}
+                  onChange={(e) => setKickForm({ ...kickForm, sendDm: e.target.checked })}
+                  className="w-4 h-4 rounded"
+                />
+                <label htmlFor="kickSendDm" className="text-sm">Envoyer un message privé</label>
+              </div>
+              <button
+                onClick={handleKick}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition"
+              >
+                Confirmer l'exclusion
               </button>
             </div>
           </div>
