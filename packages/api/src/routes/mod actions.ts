@@ -241,6 +241,40 @@ export async function modActionsRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post("/guilds/:guildId/members/:memberId/remove-role", async (request, reply) => {
+    const { guildId, memberId } = request.params as { guildId: string; memberId: string };
+    const { roleId } = (request.body as any) || {};
+    const client = (request as any).client;
+    const prisma = (request as any).prisma;
+
+    try {
+      if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
+
+      const guild = await client.guilds.fetch(guildId);
+      if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
+
+      const member = await guild.members.fetch(memberId).catch(() => null);
+      if (!member) return reply.status(404).send({ error: "Membre introuvable sur Discord" });
+
+      const role = guild.roles.cache.get(roleId);
+      if (!role) return reply.status(404).send({ error: "Rôle introuvable" });
+
+      await member.roles.remove(role, "Rôle retiré depuis le dashboard");
+
+      await logBotAction(prisma, guildId, "ROLE_REMOVE", {
+        targetId: memberId,
+        targetName: member.user.tag,
+        reason: `Rôle retiré: ${role.name}`,
+        details: { roleId, roleName: role.name },
+      });
+
+      return reply.send({ success: true, message: `Rôle "${role.name}" retiré de ${member.user.tag}` });
+    } catch (e: any) {
+      console.error("Remove role error:", e);
+      return reply.status(500).send({ error: e.message });
+    }
+  });
+
   app.post("/guilds/:guildId/lockdown", async (request, reply) => {
     const { guildId } = request.params as { guildId: string };
     const { active } = (request.body as any) || {};
@@ -293,6 +327,49 @@ export async function modActionsRoutes(app: FastifyInstance) {
       return reply.send({ success: true, message: active ? "Lockdown activé" : "Lockdown désactivé" });
     } catch (e: any) {
       console.error("Lockdown error:", e);
+      return reply.status(500).send({ error: e.message });
+    }
+  });
+
+  app.post("/guilds/:guildId/members/:memberId/roles", async (request, reply) => {
+    const { guildId, memberId } = request.params as { guildId: string; memberId: string };
+    const { action, roleId } = (request.body as any) || {};
+    const client = (request as any).client;
+    const prisma = (request as any).prisma;
+
+    try {
+      if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
+
+      const guild = await client.guilds.fetch(guildId);
+      if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
+
+      const member = await guild.members.fetch(memberId).catch(() => null);
+      if (!member) return reply.status(404).send({ error: "Membre introuvable" });
+
+      const role = guild.roles.cache.get(roleId);
+      if (!role) return reply.status(404).send({ error: "Rôle introuvable" });
+
+      if (action === "add") {
+        await member.roles.add(role, "Ajouté depuis le dashboard");
+        await logBotAction(prisma, guildId, "ROLE_ADD", {
+          targetId: memberId,
+          targetName: member.user.tag,
+          reason: `Rôle @${role.name} ajouté`,
+        });
+        return reply.send({ success: true, message: `Rôle @${role.name} ajouté` });
+      } else if (action === "remove") {
+        await member.roles.remove(role, "Retiré depuis le dashboard");
+        await logBotAction(prisma, guildId, "ROLE_REMOVE", {
+          targetId: memberId,
+          targetName: member.user.tag,
+          reason: `Rôle @${role.name} retiré`,
+        });
+        return reply.send({ success: true, message: `Rôle @${role.name} retiré` });
+      }
+
+      return reply.status(400).send({ error: "Action invalide" });
+    } catch (e: any) {
+      console.error("Roles error:", e);
       return reply.status(500).send({ error: e.message });
     }
   });

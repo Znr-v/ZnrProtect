@@ -47,12 +47,35 @@ export async function memberRoutes(app: FastifyInstance) {
   app.get("/:guildId/:discordId/details", async (request) => {
     const { guildId, discordId } = request.params as { guildId: string; discordId: string };
     const prisma = (request as any).prisma;
+    const client = (request as any).client;
 
     const member = await prisma.member.findUnique({
       where: { discordId_guildId: { discordId, guildId } },
     });
 
     if (!member) return { error: "Membre introuvable" };
+
+    let roleIds: string[] = [];
+    let avatar: string | null = null;
+    if (client?.isReady()) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        if (guild) {
+          const discordMember = await guild.members.fetch(discordId).catch(() => null);
+          if (discordMember) {
+            roleIds = discordMember.roles.cache.map(r => r.id);
+            const hash = discordMember.user.avatar;
+            if (hash) {
+              const ext = hash.startsWith("a_") ? "gif" : "png";
+              avatar = `https://cdn.discordapp.com/avatars/${discordId}/${hash}.${ext}`;
+            } else {
+              const defaultIndex = Number(discordMember.user.discriminator) % 5;
+              avatar = `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
+            }
+          }
+        }
+      } catch {}
+    }
 
     const [botLogs, securityEvents, detectedLinks, riskScores] = await Promise.all([
       prisma.botActionLog.findMany({
@@ -77,7 +100,45 @@ export async function memberRoutes(app: FastifyInstance) {
       }),
     ]);
 
-    return { member, botLogs, securityEvents, detectedLinks, riskScores: riskScores[0] || null };
+    return { member: { ...member, roleIds }, avatar, botLogs, securityEvents, detectedLinks, riskScores: riskScores[0] || null };
+  });
+
+  // Get member Discord roles and all server roles
+  app.get("/:guildId/:discordId/roles", async (request, reply) => {
+    const { guildId, discordId } = request.params as { guildId: string; discordId: string };
+    const client = (request as any).client;
+
+    try {
+      if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
+
+      const guild = await client.guilds.fetch(guildId);
+      if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
+
+      const discordMember = await guild.members.fetch(discordId).catch(() => null);
+      
+      const userRoles = discordMember?.roles.cache
+        .filter((r: any) => r.name !== "@everyone")
+        .map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          color: r.color ? `#${r.color.toString(16).padStart(6, "0")}` : "#99aab5",
+        }))
+        .sort((a: any, b: any) => b.position - a.position) || [];
+
+      const allRoles = guild.roles.cache
+        .filter((r: any) => r.name !== "@everyone")
+        .map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          color: r.color ? `#${r.color.toString(16).padStart(6, "0")}` : "#99aab5",
+        }))
+        .sort((a: any, b: any) => b.position - a.position);
+
+      return { roles: userRoles, allRoles };
+    } catch (e: any) {
+      console.error("Get roles error:", e);
+      return reply.status(500).send({ error: e.message });
+    }
   });
 
   // List members for a guild (with risk filtering)
@@ -92,13 +153,14 @@ export async function memberRoutes(app: FastifyInstance) {
       order = "desc",
     } = request.query as any;
     const prisma = (request as any).prisma;
+    const client = (request as any).client;
 
     const where: any = { guildId, riskScore: { gte: parseInt(minRisk) } };
     if (quarantined === "true") where.quarantined = true;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const [members, total] = await Promise.all([
+    const [dbMembers, total] = await Promise.all([
       prisma.member.findMany({
         where,
         orderBy: { [sort]: order },
@@ -107,6 +169,40 @@ export async function memberRoutes(app: FastifyInstance) {
       }),
       prisma.member.count({ where }),
     ]);
+
+    let members = dbMembers;
+    if (client && client.isReady()) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        if (guild) {
+          const memberRoleMap = new Map<string, string[]>();
+          
+          // Use cache which should have all members if GUILD_MEMBERS intent is enabled
+          for (const [userId, member] of guild.members.cache) {
+            memberRoleMap.set(userId, member.roles.cache.map(r => r.id));
+          }
+          
+          // If cache is empty, try to fetch
+          if (memberRoleMap.size === 0) {
+            try {
+              await guild.members.fetch();
+              for (const [userId, member] of guild.members.cache) {
+                memberRoleMap.set(userId, member.roles.cache.map(r => r.id));
+              }
+            } catch {}
+          }
+          
+          members = dbMembers.map(m => ({
+            ...m,
+            roleIds: memberRoleMap.get(m.discordId) || [],
+          }));
+        }
+      } catch (e) {
+        console.log("Could not fetch Discord members:", e);
+      }
+    } else {
+      console.log("Client not ready or not available");
+    }
 
     return { members, total, page: parseInt(page) };
   });

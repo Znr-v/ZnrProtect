@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon } from "lucide-react";
+import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon, Search, Filter } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { SeverityBadge } from "@/components/SeverityBadge";
@@ -25,19 +25,43 @@ type BotActionLog = { id: string; action: string; targetId?: string; targetName?
 
 type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
 
-function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string }) {
+function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string; onUpdate?: (m: Member) => void }) {
   const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
   const isMuted = member.timedOutUntil && new Date(member.timedOutUntil) > new Date();
-  const [detailView, setDetailView] = useState<"overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages">("overview");
-  const [detailData, setDetailData] = useState<{ botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any } | null>(null);
+  const [detailView, setDetailView] = useState<"overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages" | "roles">("overview");
+  const [detailData, setDetailData] = useState<{ botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any; avatar?: string | null } | null>(null);
   const [messages, setMessages] = useState<any[] | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [roles, setRoles] = useState<{ id: string; name: string; color: string }[] | null>(null);
+  const [userRolesList, setUserRolesList] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  const [removingRole, setRemovingRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDetailData(null);
+    setMessages(null);
+    setRoles(null);
+    setDetailView("overview");
+    setLoadingRoles(false);
+    loadDetails();
+  }, [member.discordId]);
 
   const loadDetails = async () => {
-    if (!detailData) {
-      const data = await apiFetch<{ member: Member; botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any }>(`/api/members/${guildId}/${member.discordId}/details`);
-      setDetailData(data);
+    const data = await apiFetch<{ member: Member; botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any; avatar?: string | null }>(`/api/members/${guildId}/${member.discordId}/details`);
+    setDetailData(data);
+  };
+
+  const loadRoles = async (force = false) => {
+    if (!force && roles && roles.length > 0) return;
+    setLoadingRoles(true);
+    try {
+      const data = await apiFetch<{ roles: { id: string; name: string; color: string }[]; allRoles: { id: string; name: string; color: string }[] }>(`/api/members/${guildId}/${member.discordId}/roles`);
+      setRoles(data.allRoles || []);
+      setUserRolesList(data.roles || []);
+    } catch (e) {
+      console.error("Failed to load roles:", e);
     }
+    setLoadingRoles(false);
   };
 
   const loadMessages = async () => {
@@ -51,9 +75,10 @@ function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onCl
     setLoadingMessages(false);
   };
 
-  const handleViewChange = async (view: "overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages") => {
+  const handleViewChange = async (view: "overview" | "mutes" | "warns" | "events" | "links" | "risk" | "messages" | "roles") => {
     if (view !== "overview") await loadDetails();
-    if (view === "messages" && !messages) loadMessages();
+    if (view === "messages") loadMessages();
+    if (view === "roles") loadRoles(true);
     setDetailView(view);
   };
 
@@ -63,12 +88,14 @@ function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onCl
     MUTE: "🔇 Mute", UNMUTE: "🔊 Mute retiré", BAN: "🚫 Banni", UNBAN: "✅ Débanni",
     KICK: "👢 Exclu", TRUST_ADD: "✓ Fiable ajouté", TRUST_REMOVE: "✗ Fiable retiré",
     QUARANTINE: "⚠️ Quarantaine", CONFIG_CHANGE: "⚙️ Config", LOCKDOWN_ON: "🔒 Lockdown",
+    ROLE_REMOVE: "🎭 Rôle retiré",
   };
 
   const getActionIcon = (action: string) => {
     const icons: Record<string, string> = {
       MUTE: "🔇", UNMUTE: "🔊", BAN: "🚫", UNBAN: "✅", KICK: "👢",
       TRUST_ADD: "✓", TRUST_REMOVE: "✗", QUARANTINE: "⚠️", LOCKDOWN_ON: "🔒", LOCKDOWN_OFF: "🔓",
+      ROLE_REMOVE: "🎭",
     };
     return icons[action] || "📋";
   };
@@ -131,6 +158,13 @@ function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onCl
             </span>
           )}
         </div>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-dark-700">
+        <button onClick={() => handleViewChange("roles")} className="flex items-center justify-between w-full bg-dark-700/30 hover:bg-dark-700 rounded-lg p-3 transition text-left">
+          <span className="text-gray-400 text-xs uppercase tracking-wider">Rôles</span>
+          <span className="text-gray-500 text-sm">Voir →</span>
+        </button>
       </div>
 
       {logs.length > 0 && (
@@ -285,6 +319,174 @@ function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onCl
     </div>
   );
 
+  const handleRemoveRole = async (roleId: string, roleName: string) => {
+    setRemovingRole(roleId);
+    try {
+      await apiFetch(`/api/guilds/${guildId}/members/${member.discordId}/roles`, {
+        method: "POST",
+        body: { action: "remove", roleId },
+      });
+      
+      // Get updated member with new roleIds
+      const details = await apiFetch<{ member: Member }>(`/api/members/${guildId}/${member.discordId}/details`);
+      
+      // Update parent state
+      if (onUpdate && details.member) {
+        onUpdate(details.member);
+      }
+      
+      // Reload roles list
+      await loadRoles(true);
+    } catch (e) {
+      console.error("Failed to remove role:", e);
+    }
+    setRemovingRole(null);
+  };
+
+  const [roleSearch, setRoleSearch] = useState("");
+  const [showAddRole, setShowAddRole] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null);
+
+  const userRoleIds = userRolesList.map(r => r.id);
+  const availableRoles = (roles || []).filter(r => !userRoleIds.includes(r.id) && r.name.toLowerCase().includes(roleSearch.toLowerCase()));
+  const userRoles = userRolesList;
+
+  const renderRoles = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Rôles du membre</h4>
+      
+      {loadingRoles && (
+        <div className="flex items-center justify-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-discord"></div>
+          <span className="ml-2 text-gray-400 text-sm">Chargement...</span>
+        </div>
+      )}
+
+      {!loadingRoles && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">Rôles actuels ({userRoles.length})</span>
+            <button 
+              onClick={() => { setShowAddRole(true); setRoleSearch(""); }}
+              className="text-xs bg-discord hover:bg-discord/80 px-2 py-1 rounded text-white transition"
+            >
+              + Ajouter
+            </button>
+          </div>
+
+          {userRoles.length === 0 ? (
+            <p className="text-gray-500 text-sm italic">Aucun rôle</p>
+          ) : (
+            <div className="space-y-2">
+              {userRoles.map(r => (
+                <div key={r.id} className="flex items-center justify-between bg-dark-700/30 rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: r.color }} />
+                    <span className="text-sm font-medium">@{r.name}</span>
+                  </div>
+                  <button
+                    onClick={() => setConfirmRemove({ id: r.id, name: r.name })}
+                    disabled={removingRole === r.id}
+                    className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 transition"
+                  >
+                    {removingRole === r.id ? "..." : "Retirer"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showAddRole && (
+            <div className="mt-4 pt-4 border-t border-dark-700">
+              <input
+                type="text"
+                value={roleSearch}
+                onChange={(e) => setRoleSearch(e.target.value)}
+                placeholder="Rechercher ou sélectionner un rôle..."
+                className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 mb-2"
+                autoFocus
+              />
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {availableRoles.length === 0 ? (
+                  <p className="text-gray-500 text-sm">Aucun rôle disponible</p>
+                ) : (
+                  availableRoles.map(r => (
+                    <button
+                      key={r.id}
+                      onClick={async () => {
+                        setLoadingRoles(true);
+                        try {
+                          await apiFetch(`/api/guilds/${guildId}/members/${member.discordId}/roles`, {
+                            method: "POST",
+                            body: { action: "add", roleId: r.id }
+                          });
+                          
+                          // Get updated member with new roleIds
+                          const details = await apiFetch<{ member: Member }>(`/api/members/${guildId}/${member.discordId}/details`);
+                          if (onUpdate && details.member) {
+                            onUpdate(details.member);
+                          }
+                          
+                          await loadRoles(true);
+                        } catch (e) {
+                          console.error(e);
+                        }
+                        setLoadingRoles(false);
+                        setShowAddRole(false);
+                        setRoleSearch("");
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-dark-700 rounded text-left"
+                    >
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: r.color }} />
+                      <span className="text-sm">@{r.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <button 
+                onClick={() => { setShowAddRole(false); setRoleSearch(""); }}
+                className="mt-2 text-xs text-gray-400 hover:text-white"
+              >
+                Annuler
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {confirmRemove && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-dark-800 rounded-xl p-5 border border-dark-700 max-w-sm mx-4">
+            <h4 className="font-bold text-lg mb-2">Confirmer</h4>
+            <p className="text-gray-400 text-sm mb-4">
+              Retirer le rôle <span style={{ color: roles?.find(r => r.id === confirmRemove.id)?.color }}>@{confirmRemove.name}</span> de <strong>{member.username}</strong> ?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button 
+                onClick={() => setConfirmRemove(null)}
+                className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={async () => {
+                  setConfirmRemove(null);
+                  await handleRemoveRole(confirmRemove.id, confirmRemove.name);
+                }}
+                className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 rounded text-white transition"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderMessages = () => (
     <div className="space-y-3">
       <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
@@ -334,6 +536,7 @@ function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onCl
             <div className="flex-1 min-w-0">
               <span className="font-medium text-gray-200 text-sm">{actionLabels[log.action] || log.action}</span>
               {log.reason && <p className="text-gray-500 text-xs truncate">{log.reason}</p>}
+              {log.details?.roleName && <p className="text-gray-500 text-xs truncate">Rôle: {log.details.roleName}</p>}
               <p className="text-gray-600 text-[10px]">{new Date(log.createdAt).toLocaleString("fr-FR")}</p>
             </div>
           </div>
@@ -346,8 +549,14 @@ function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onCl
     <div className="bg-dark-800 rounded-xl border border-dark-700 p-4 h-fit max-h-[80vh] overflow-y-auto">
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-discord to-purple-600 flex items-center justify-center text-xl font-bold">
-            {member.username.charAt(0).toUpperCase()}
+          <div className="w-12 h-12 rounded-full bg-dark-700 flex-shrink-0 overflow-hidden">
+            {detailData?.avatar ? (
+              <img src={detailData.avatar} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-discord to-purple-600 flex items-center justify-center text-xl font-bold">
+                {member.username.charAt(0).toUpperCase()}
+              </div>
+            )}
           </div>
           <div>
             <h3 className="font-bold text-lg">{member.username}</h3>
@@ -364,6 +573,7 @@ function MemberDetail({ member, onClose, logs, guildId }: { member: Member; onCl
       {detailView === "warns" && renderWarns()}
       {detailView === "links" && renderLinks()}
       {detailView === "risk" && renderRisk()}
+      {detailView === "roles" && renderRoles()}
       {detailView === "messages" && renderMessages()}
       {detailView === "events" && renderEvents()}
     </div>
@@ -395,7 +605,7 @@ export default function GuildPage() {
       apiFetch<{ events: Event[] }>(`/api/events/${guildId}`).then((d) => setEvents(d.events));
     }
     if (tab === "members") {
-      apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc`).then((d) => setMembers(d.members));
+      apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => setMembers(d.members));
     }
     if (tab === "logs") {
       apiFetch<{ logs: BotActionLog[] }>(`/api/logs/${guildId}`).then((d) => setLogs(d.logs));
@@ -433,6 +643,7 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
     LOCKDOWN_OFF: <Shield className="w-4 h-4 text-green-400" />,
     QUARANTINE: <AlertTriangle className="w-4 h-4 text-red-400" />,
     CONFIG_CHANGE: <Settings className="w-4 h-4 text-blue-400" />,
+    ROLE_REMOVE: <X className="w-4 h-4 text-red-400" />,
   };
 
   const actionLabels: Record<string, string> = {
@@ -447,6 +658,7 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
     LOCKDOWN_OFF: "Lockdown désactivé",
     QUARANTINE: "Mis en quarantaine",
     CONFIG_CHANGE: "Config modifiée",
+    ROLE_REMOVE: "Rôle retiré",
   };
 
   if (logs.length === 0) {
@@ -474,6 +686,9 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
             </div>
             {log.reason && (
               <p className="text-gray-400 text-sm">📝 {log.reason}</p>
+            )}
+            {log.details?.roleName && !log.reason && (
+              <p className="text-gray-400 text-sm">🎭 Rôle: {log.details.roleName}</p>
             )}
           </div>
           <span className="text-gray-500 text-sm">
@@ -546,14 +761,14 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
             <MembersTab 
               members={members} 
               guildId={guildId} 
-              onRefresh={() => apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc`).then((d) => setMembers(d.members))}
+              onRefresh={() => apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => setMembers(d.members))}
               selectedMember={selectedMember}
               onSelectMember={setSelectedMember}
             />
           </div>
           {selectedMember && (
             <div className="w-80">
-              <MemberDetail member={selectedMember} onClose={() => setSelectedMember(null)} logs={memberActions} guildId={guildId} />
+              <MemberDetail member={selectedMember} onClose={() => setSelectedMember(null)} logs={memberActions} guildId={guildId} onUpdate={(updated) => setSelectedMember(updated)} />
             </div>
           )}
         </div>
@@ -850,6 +1065,59 @@ function MembersTab({ members, guildId, onRefresh, selectedMember, onSelectMembe
   const [actionResult, setActionResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [muteModal, setMuteModal] = useState<Member | null>(null);
   const [muteForm, setMuteForm] = useState({ duration: 5, reason: "", sendDm: true });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterRoles, setFilterRoles] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [roles, setRoles] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [roleInput, setRoleInput] = useState("");
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      onRefresh();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [onRefresh]);
+
+  // Recharger les membres quand on change les filtres de rôles pour avoir les derniers roleIds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onRefresh();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [filterRoles.length]);
+
+  useEffect(() => {
+    apiFetch<{ roles: any[] }>(`/api/guilds/${guildId}/roles`).then(d => {
+      if (d.roles) {
+        setRoles(d.roles.map((r: any) => ({ id: r.id, name: r.name, color: r.color || "#99aab5" })));
+      }
+    }).catch(() => {});
+  }, [guildId]);
+
+  const filteredRoles = roles.filter(r => 
+    !filterRoles.some(fr => fr.id === r.id) && 
+    r.name.toLowerCase().includes(roleInput.replace("@", "").toLowerCase())
+  );
+
+  const addRole = (role: { id: string; name: string; color: string }) => {
+    setFilterRoles([...filterRoles, role]);
+    setRoleInput("");
+    setShowRoleDropdown(false);
+  };
+
+  const removeRole = (roleId: string) => {
+    setFilterRoles(filterRoles.filter(r => r.id !== roleId));
+  };
+
+const filteredMembers = members.filter(m => {
+    const matchesSearch = m.username.toLowerCase().includes(searchQuery.toLowerCase());
+    const memberRoleIds = m.roleIds || [];
+    
+    // AND: le membre doit avoir TOUS les rôles sélectionnés
+    const matchesRoles = filterRoles.length === 0 || filterRoles.every(r => memberRoleIds.includes(r.id));
+    
+    return matchesSearch && matchesRoles;
+  });
 
   const doAction = async (discordId: string, action: "ban" | "kick" | "timeout" | "unban" | "unmute" | "trust", data?: any) => {
     setActionLoading(discordId + action);
@@ -902,6 +1170,82 @@ function MembersTab({ members, guildId, onRefresh, selectedMember, onSelectMembe
 
   return (
     <>
+      <div className="flex gap-3 mb-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            placeholder="Rechercher un membre..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-dark-800 border border-dark-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-discord"
+          />
+        </div>
+        {roles.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {filterRoles.map((role) => (
+              <span
+                key={role.id}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium"
+                style={{ backgroundColor: `${role.color}20`, color: role.color }}
+              >
+                @{role.name}
+                <button
+                  onClick={() => removeRole(role.id)}
+                  className="hover:bg-white/20 rounded p-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            <div className="relative">
+              <input
+                type="text"
+                value={roleInput}
+                onChange={(e) => {
+                  if (e.target.value.includes("@")) {
+                    setRoleInput(e.target.value);
+                    setShowRoleDropdown(true);
+                  } else if (e.target.value === "") {
+                    setRoleInput("");
+                    setShowRoleDropdown(false);
+                  }
+                }}
+                onFocus={() => setShowRoleDropdown(true)}
+                onBlur={() => setTimeout(() => setShowRoleDropdown(false), 200)}
+                placeholder="@Ajouter"
+                className="w-32 bg-dark-800 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-discord"
+              />
+              {showRoleDropdown && roleInput.includes("@") && (
+                <div className="absolute top-full left-0 mt-1 w-56 bg-dark-800 border border-dark-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                  {filteredRoles.length === 0 ? (
+                    <p className="text-gray-500 text-sm p-2">Aucun rôle trouvé</p>
+                  ) : (
+                    filteredRoles.map((role) => (
+                      <button
+                        key={role.id}
+                        onClick={() => addRole(role)}
+                        className="w-full text-left px-3 py-2 hover:bg-dark-700 flex items-center gap-2"
+                      >
+                        <span 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: role.color }}
+                        />
+                        <span className="text-white text-sm">@{role.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        <span className="text-gray-500 text-sm py-2 flex items-center gap-2">
+          {filteredMembers.length} membre{filteredMembers.length !== 1 ? "s" : ""}
+          {filterRoles.length > 0 && <span className="text-discord">• {members.length} total</span>}
+        </span>
+      </div>
+
       <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-dark-700 text-gray-400 text-xs uppercase tracking-wider">
@@ -915,7 +1259,7 @@ function MembersTab({ members, guildId, onRefresh, selectedMember, onSelectMembe
             </tr>
           </thead>
           <tbody>
-            {members.map((m) => {
+            {filteredMembers.map((m) => {
               const riskColor =
                 m.riskScore >= 81 ? "text-red-400" : m.riskScore >= 61 ? "text-orange-400" : m.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
               const loading = actionLoading === m.discordId + "ban" || actionLoading === m.discordId + "kick" || actionLoading === m.discordId + "timeout" || actionLoading === m.discordId + "unmute" || actionLoading === m.discordId + "unban" || actionLoading === m.discordId + "trust";
