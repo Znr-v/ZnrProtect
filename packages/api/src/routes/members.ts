@@ -177,25 +177,32 @@ export async function memberRoutes(app: FastifyInstance) {
         if (guild) {
           const memberRoleMap = new Map<string, string[]>();
           
-          // Use cache which should have all members if GUILD_MEMBERS intent is enabled
+          // Always fetch all members to get avatars
+          try {
+            await guild.members.fetch();
+          } catch {}
+          
           for (const [userId, member] of guild.members.cache) {
             memberRoleMap.set(userId, member.roles.cache.map(r => r.id));
           }
           
-          // If cache is empty, try to fetch
-          if (memberRoleMap.size === 0) {
-            try {
-              await guild.members.fetch();
-              for (const [userId, member] of guild.members.cache) {
-                memberRoleMap.set(userId, member.roles.cache.map(r => r.id));
-              }
-            } catch {}
-          }
-          
-          members = dbMembers.map(m => ({
-            ...m,
-            roleIds: memberRoleMap.get(m.discordId) || [],
-          }));
+          members = dbMembers.map(m => {
+            const discordMember = guild.members.cache.get(m.discordId);
+            let avatar: string | null = null;
+            if (discordMember?.user.avatar) {
+              const hash = discordMember.user.avatar;
+              const ext = hash.startsWith("a_") ? "gif" : "png";
+              avatar = `https://cdn.discordapp.com/avatars/${m.discordId}/${hash}.${ext}`;
+            } else if (discordMember) {
+              const defaultIndex = Number(discordMember.user.discriminator) % 5;
+              avatar = `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
+            }
+            return {
+              ...m,
+              roleIds: memberRoleMap.get(m.discordId) || [],
+              avatar,
+            };
+          });
         }
       } catch (e) {
         console.log("Could not fetch Discord members:", e);

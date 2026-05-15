@@ -20,7 +20,7 @@ type GuildData = {
 
 type Incident = { id: string; title: string; severity: string; status: string; description?: string; createdAt: string; _count: { events: number; actions: number }; channelName?: string; events?: any[] };
 type Event = { id: string; type: string; severity: string; actorId: string; actorName?: string; channelId: string; channelName?: string; description: string; metadata: any; createdAt: string };
-type Member = { id: string; discordId: string; username: string; riskScore: number; quarantined: boolean; trusted: boolean; messageCount: number; warnCount: number; timedOutUntil?: string | null };
+type Member = { id: string; discordId: string; username: string; riskScore: number; quarantined: boolean; trusted: boolean; messageCount: number; warnCount: number; timedOutUntil?: string | null; avatar?: string | null };
 type BotActionLog = { id: string; action: string; targetId?: string; targetName?: string; moderatorId?: string; moderatorName?: string; reason?: string; details?: any; createdAt: string };
 
 type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
@@ -595,6 +595,7 @@ export default function GuildPage() {
 
   useEffect(() => {
     apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild));
+    apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => setMembers(d.members));
   }, [guildId]);
 
   useEffect(() => {
@@ -630,7 +631,37 @@ export default function GuildPage() {
   );
 }
 
-function LogsTab({ logs }: { logs: BotActionLog[] }) {
+function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Member[] }) {
+  const [search, setSearch] = useState("");
+  const [actionFilter, setActionFilter] = useState<string | null>(null);
+  const [periodFilter, setPeriodFilter] = useState<string>("all");
+  const [showAtDropdown, setShowAtDropdown] = useState(false);
+
+  const atPos = search.indexOf("@");
+  const searchAfterAt = atPos !== -1 ? search.slice(atPos + 1).toLowerCase() : "";
+  const showDropdown = search.includes("@") && showAtDropdown && members.length > 0;
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearch(val);
+    if (val.includes("@") && val.indexOf("@") === val.lastIndexOf("@")) {
+      setShowAtDropdown(true);
+    } else if (!val.includes("@")) {
+      setShowAtDropdown(false);
+    }
+  };
+
+  const selectMember = (username: string) => {
+    setSearch(username);
+    setShowAtDropdown(false);
+  };
+
+  const displayedMembers = searchAfterAt
+    ? members.filter(m => (m.username || "").toLowerCase().includes(searchAfterAt)).slice(0, 8)
+    : members.slice(0, 8);
+
+  console.log("AVATARS:", displayedMembers.map(m => m.avatar).slice(0,3));
+
   const actionIcons: Record<string, React.ReactNode> = {
     BAN: <Ban className="w-4 h-4 text-red-400" />,
     KICK: <Gavel className="w-4 h-4 text-orange-400" />,
@@ -661,46 +692,186 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
     ROLE_REMOVE: "Rôle retiré",
   };
 
+  const actionFilters = [
+    { key: "BAN", label: "Bans", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+    { key: "KICK", label: "Kicks", color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+    { key: "MUTE", label: "Mutes", color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+    { key: "UNMUTE", label: "Démutes", color: "bg-green-500/20 text-green-400 border-green-500/30" },
+    { key: "UNBAN", label: "Débans", color: "bg-green-500/20 text-green-400 border-green-500/30" },
+    { key: "QUARANTINE", label: "Quarantaine", color: "bg-red-500/20 text-red-400 border-red-500/30" },
+    { key: "TRUST_ADD", label: "Fiable", color: "bg-green-500/20 text-green-400 border-green-500/30" },
+    { key: "CONFIG_CHANGE", label: "Config", color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  ];
+
+  const periodOptions = [
+    { key: "all", label: "Tout" },
+    { key: "today", label: "Aujourd'hui" },
+    { key: "week", label: "7 jours" },
+    { key: "month", label: "30 jours" },
+  ];
+
+  const filteredLogs = logs.filter(log => {
+    const searchWithoutAt = search.replace(/^@/, "");
+    const searchLower = searchWithoutAt.toLowerCase();
+    const matchesSearch = !search || 
+      log.reason?.toLowerCase().includes(searchLower) ||
+      log.targetName?.toLowerCase().includes(searchLower) ||
+      log.targetId?.includes(searchWithoutAt) ||
+      log.moderatorName?.toLowerCase().includes(searchLower) ||
+      log.action.toLowerCase().includes(searchLower) ||
+      actionLabels[log.action]?.toLowerCase().includes(searchLower);
+
+    const matchesAction = !actionFilter || log.action === actionFilter;
+
+    let matchesPeriod = true;
+    const logDate = new Date(log.createdAt);
+    const now = new Date();
+    if (periodFilter === "today") {
+      matchesPeriod = logDate.toDateString() === now.toDateString();
+    } else if (periodFilter === "week") {
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      matchesPeriod = logDate >= weekAgo;
+    } else if (periodFilter === "month") {
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      matchesPeriod = logDate >= monthAgo;
+    }
+
+    return matchesSearch && matchesAction && matchesPeriod;
+  });
+
+  const hasFilters = search || actionFilter || periodFilter !== "all";
+
   if (logs.length === 0) {
     return (
       <div className="bg-dark-800 rounded-xl border border-dark-700 p-8 text-center">
         <ScrollText className="w-12 h-12 text-gray-600 mx-auto mb-4" />
         <p className="text-gray-400">Aucune action enregistrée</p>
-</div>
-  );
-}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-2">
-      {logs.map((log) => (
-        <div key={log.id} className="bg-dark-800 rounded-lg p-4 border border-dark-700 flex items-center gap-4 hover:border-dark-600 transition">
-          <div className="p-2 bg-dark-700 rounded-lg">
-            {actionIcons[log.action] || <Activity className="w-4 h-4" />}
+    <div className="space-y-4">
+      <div className="bg-dark-800 rounded-xl border border-dark-700 p-4 space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            placeholder="Rechercher dans les logs... (raison, utilisateur, @membre)"
+            value={search}
+            onChange={handleSearchChange}
+            onFocus={() => search.includes("@") && setShowAtDropdown(true)}
+            onBlur={() => setTimeout(() => setShowAtDropdown(false), 200)}
+            className="w-full bg-dark-900 border border-dark-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+          />
+          {showDropdown && (
+            <div className="absolute top-full left-0 mt-1 w-72 bg-dark-800 border border-dark-700 rounded-lg shadow-xl z-[100] max-h-48 overflow-y-auto">
+              {displayedMembers.map((member: any) => (
+                <button
+                  key={member.discordId}
+                  onClick={() => selectMember(member.username)}
+                  className="w-full text-left px-3 py-2 hover:bg-dark-700 flex items-center gap-3"
+                >
+                  {member.avatar ? (
+                      <img src={member.avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-discord flex items-center justify-center text-xs font-medium text-white">
+                        {member.username ? member.username.charAt(0).toUpperCase() : "?"}
+                      </div>
+                    )}
+                  <span className="text-white text-sm">{member.username || "Inconnu"}</span>
+                  {member.riskScore >= 81 && <span className="ml-auto text-red-400 text-xs">🔴</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {actionFilters.map(filter => (
+            <button
+              key={filter.key}
+              onClick={() => setActionFilter(actionFilter === filter.key ? null : filter.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                actionFilter === filter.key 
+                  ? filter.color 
+                  : "bg-dark-700 text-gray-400 border-dark-600 hover:bg-dark-600"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-gray-500" />
+          <div className="flex gap-1">
+            {periodOptions.map(period => (
+              <button
+                key={period.key}
+                onClick={() => setPeriodFilter(period.key)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                  periodFilter === period.key
+                    ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                    : "bg-dark-700 text-gray-400 border border-dark-600 hover:bg-dark-600"
+                }`}
+              >
+                {period.label}
+              </button>
+            ))}
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{actionLabels[log.action] || log.action}</span>
-              {log.targetName && (
-                <span className="text-blue-400 text-sm">{log.targetName}</span>
+          {hasFilters && (
+            <button
+              onClick={() => { setSearch(""); setActionFilter(null); setPeriodFilter("all"); }}
+              className="ml-auto text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1"
+            >
+              <X className="w-3 h-3" /> Réinitialiser
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between text-sm text-gray-500">
+        <span>{filteredLogs.length} résultat{filteredLogs.length !== 1 ? "s" : ""}</span>
+        {hasFilters && filteredLogs.length === 0 && (
+          <span className="text-yellow-500">Aucun résultat pour ces filtres</span>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        {filteredLogs.map((log) => (
+          <div key={log.id} className="bg-dark-800 rounded-lg p-4 border border-dark-700 flex items-center gap-4 hover:border-dark-600 transition">
+            <div className="p-2 bg-dark-700 rounded-lg">
+              {actionIcons[log.action] || <Activity className="w-4 h-4" />}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{actionLabels[log.action] || log.action}</span>
+                {log.targetName && (
+                  <span className="text-blue-400 text-sm">{log.targetName}</span>
+                )}
+              </div>
+              {log.reason && (
+                <p className="text-gray-400 text-sm">📝 {log.reason}</p>
+              )}
+              {log.details?.roleName && !log.reason && (
+                <p className="text-gray-400 text-sm">🎭 Rôle: {log.details.roleName}</p>
+              )}
+              {log.moderatorName && (
+                <p className="text-gray-500 text-xs mt-1">Par: {log.moderatorName}</p>
               )}
             </div>
-            {log.reason && (
-              <p className="text-gray-400 text-sm">📝 {log.reason}</p>
-            )}
-            {log.details?.roleName && !log.reason && (
-              <p className="text-gray-400 text-sm">🎭 Rôle: {log.details.roleName}</p>
-            )}
+            <span className="text-gray-500 text-sm">
+              {new Date(log.createdAt).toLocaleString("fr-FR", { 
+                day: "numeric", 
+                month: "short", 
+                hour: "2-digit", 
+                minute: "2-digit" 
+              })}
+            </span>
           </div>
-          <span className="text-gray-500 text-sm">
-            {new Date(log.createdAt).toLocaleString("fr-FR", { 
-              day: "numeric", 
-              month: "short", 
-              hour: "2-digit", 
-              minute: "2-digit" 
-            })}
-          </span>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -773,7 +944,7 @@ function LogsTab({ logs }: { logs: BotActionLog[] }) {
           )}
         </div>
       )}
-      {tab === "logs" && <LogsTab logs={logs} />}
+      {tab === "logs" && <LogsTab logs={logs} members={members} />}
       {tab === "config" && <ConfigTab guild={guild} config={guild.config} onUpdate={() => apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild))} />}
 
       {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
