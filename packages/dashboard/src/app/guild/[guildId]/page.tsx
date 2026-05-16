@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon, Search, Filter } from "lucide-react";
+import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon, Search, Filter, History } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { StatCard } from "@/components/StatCard";
 import { SeverityBadge } from "@/components/SeverityBadge";
@@ -28,7 +28,7 @@ type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
 function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string; onUpdate?: (m: Member) => void }) {
   const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
   const isMuted = member.timedOutUntil && new Date(member.timedOutUntil) > new Date();
-  const [detailView, setDetailView] = useState<"overview" | "mutes" | "warns" | "events" | "risk" | "messages" | "roles">("overview");
+  const [detailView, setDetailView] = useState<"overview" | "mutes" | "kicks" | "bans" | "events" | "risk" | "messages" | "roles">("overview");
   const [detailData, setDetailData] = useState<{ botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any; avatar?: string | null } | null>(null);
   const [messages, setMessages] = useState<any[] | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -75,7 +75,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
     setLoadingMessages(false);
   };
 
-  const handleViewChange = async (view: "overview" | "mutes" | "warns" | "events" | "risk" | "messages" | "roles") => {
+  const handleViewChange = async (view: "overview" | "mutes" | "kicks" | "bans" | "events" | "risk" | "messages" | "roles") => {
     if (view !== "overview") await loadDetails();
     if (view === "messages") loadMessages();
     if (view === "roles") loadRoles(true);
@@ -83,6 +83,19 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
   };
 
   const mutes = detailData?.botLogs.filter(l => l.action === "MUTE") || logs.filter(l => l.action === "MUTE");
+  const bans = detailData?.botLogs.filter(l => l.action === "BAN") || logs.filter(l => l.action === "BAN");
+  const kicks = detailData?.botLogs.filter(l => l.action === "KICK") || logs.filter(l => l.action === "KICK");
+
+  const formatDuration = (endDate: string) => {
+    const remaining = new Date(endDate).getTime() - Date.now();
+    if (remaining <= 0) return "expiré";
+    const minutes = Math.floor(remaining / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}j ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${minutes % 60}min`;
+    return `${minutes}min`;
+  };
 
   const actionLabels: Record<string, string> = {
     MUTE: "🔇 Mute", UNMUTE: "🔊 Mute retiré", BAN: "🚫 Banni", UNBAN: "✅ Débanni",
@@ -113,23 +126,23 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
           </div>
         </button>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <button onClick={() => handleViewChange("messages")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
             <p className="text-gray-400 text-xs">Messages</p>
             <p className="font-bold text-lg">{member.messageCount}</p>
-          </button>
-          <button onClick={() => handleViewChange("warns")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
-            <p className="text-gray-400 text-xs">Warns</p>
-            <p className={`font-bold text-lg ${member.warnCount > 0 ? "text-orange-400" : ""}`}>{member.warnCount}</p>
           </button>
           <button onClick={() => handleViewChange("mutes")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
             <p className="text-gray-400 text-xs">Mutes</p>
             <p className={`font-bold text-lg ${mutes.length > 0 ? "text-yellow-400" : ""}`}>{mutes.length}</p>
           </button>
-          <div className="bg-dark-700/30 rounded-lg p-2 text-center">
-            <p className="text-gray-400 text-xs">Jours sur serveur</p>
-            <p className="font-bold text-lg">{Math.floor((Date.now() - new Date(member.joinedAt).getTime()) / (1000 * 60 * 60 * 60))}</p>
-          </div>
+          <button onClick={() => handleViewChange("kicks")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
+            <p className="text-gray-400 text-xs">Kicks</p>
+            <p className={`font-bold text-lg ${kicks.length > 0 ? "text-orange-400" : ""}`}>{kicks.length}</p>
+          </button>
+          <button onClick={() => handleViewChange("bans")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
+            <p className="text-gray-400 text-xs">Bans</p>
+            <p className={`font-bold text-lg ${bans.length > 0 ? "text-red-400" : ""}`}>{bans.length}</p>
+          </button>
         </div>
       </div>
 
@@ -139,7 +152,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
           {isMuted ? (
             <button onClick={() => handleViewChange("mutes")} className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition">
               <VolumeX className="w-3 h-3" />
-              Mute <span className="font-bold">{Math.ceil((new Date(member.timedOutUntil!).getTime() - Date.now()) / 60000)}min</span>
+              Mute: <span className="font-bold">{formatDuration(member.timedOutUntil!)}</span>
             </button>
           ) : mutes.length > 0 ? (
             <button onClick={() => handleViewChange("mutes")} className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition">
@@ -223,6 +236,56 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
     </div>
   );
 
+  const renderKicks = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Historique des kicks</h4>
+      {kicks.length === 0 ? (
+        <p className="text-gray-500 text-sm">Aucun kick</p>
+      ) : (
+        kicks.map((kick) => (
+          <div key={kick.id} className="bg-dark-700/30 rounded-lg p-3">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-orange-400 font-medium">👢 Kick</span>
+              <span className="text-gray-500 text-xs">{new Date(kick.createdAt).toLocaleString("fr-FR")}</span>
+            </div>
+            {kick.moderatorName && (
+              <p className="text-sm">Par: {kick.moderatorName}</p>
+            )}
+            {kick.reason && (
+              <p className="text-sm text-gray-400">Raison: {kick.reason}</p>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  const renderBans = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Historique des bans</h4>
+      {bans.length === 0 ? (
+        <p className="text-gray-500 text-sm">Aucun ban</p>
+      ) : (
+        bans.map((ban) => (
+          <div key={ban.id} className="bg-dark-700/30 rounded-lg p-3">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-red-400 font-medium">🚫 Ban</span>
+              <span className="text-gray-500 text-xs">{new Date(ban.createdAt).toLocaleString("fr-FR")}</span>
+            </div>
+            {ban.reason && <p className="text-sm text-gray-400">Raison: {ban.reason}</p>}
+            {ban.details?.roleName && <p className="text-xs text-gray-500 mt-1">Rôle au moment du ban: {ban.details.roleName}</p>}
+          </div>
+        ))
+      )}
+    </div>
+  );
+
   const renderWarns = () => (
     <div className="space-y-3">
       <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
@@ -249,6 +312,21 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
                 <span className="text-gray-500 text-xs">{new Date(event.createdAt).toLocaleString("fr-FR")}</span>
               </div>
               <p className="text-sm text-gray-400">{event.description}</p>
+              {event.metadata?.sanction && (
+                <p className="text-xs text-red-400 mt-1">Sanction: {event.metadata.sanction}</p>
+              )}
+              {event.metadata?.messages?.length > 0 && (
+                <div className="mt-2 bg-dark-900 rounded p-2">
+                  <p className="text-gray-400 text-xs mb-1">Messages ({event.metadata.messages.length})</p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {event.metadata.messages.map((msg: string, i: number) => (
+                      <div key={i} className="text-xs text-gray-300 font-mono border-l-2 border-dark-700 pl-2">
+                        {msg}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </>
@@ -546,6 +624,8 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
       {detailView === "overview" && renderOverview()}
       {detailView === "mutes" && renderMutes()}
+      {detailView === "kicks" && renderKicks()}
+      {detailView === "bans" && renderBans()}
       {detailView === "warns" && renderWarns()}
       {detailView === "risk" && renderRisk()}
       {detailView === "roles" && renderRoles()}
@@ -561,6 +641,7 @@ export default function GuildPage() {
   const [tab, setTab] = useState<Tab>("overview");
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
@@ -578,7 +659,8 @@ export default function GuildPage() {
       apiFetch<{ incidents: Incident[] }>(`/api/incidents/${guildId}`).then((d) => setIncidents(d.incidents));
     }
     if (tab === "events") {
-      apiFetch<{ events: Event[] }>(`/api/events/${guildId}`).then((d) => setEvents(d.events));
+      setEventsLoading(true);
+      apiFetch<{ events: Event[] }>(`/api/events/${guildId}`).then((d) => { setEvents(d.events); setEventsLoading(false); });
     }
     if (tab === "members") {
       apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => setMembers(d.members));
@@ -611,6 +693,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
   const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [periodFilter, setPeriodFilter] = useState<string>("all");
   const [showAtDropdown, setShowAtDropdown] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<BotActionLog | null>(null);
 
   const atPos = search.indexOf("@");
   const searchAfterAt = atPos !== -1 ? search.slice(atPos + 1).toLowerCase() : "";
@@ -634,8 +717,6 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
   const displayedMembers = searchAfterAt
     ? members.filter(m => (m.username || "").toLowerCase().includes(searchAfterAt)).slice(0, 8)
     : members.slice(0, 8);
-
-  console.log("AVATARS:", displayedMembers.map(m => m.avatar).slice(0,3));
 
   const actionIcons: Record<string, React.ReactNode> = {
     BAN: <Ban className="w-4 h-4 text-red-400" />,
@@ -815,25 +896,54 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
 
       <div className="space-y-2">
         {filteredLogs.map((log) => (
-          <div key={log.id} className="bg-dark-800 rounded-lg p-4 border border-dark-700 flex items-center gap-4 hover:border-dark-600 transition">
+          <div 
+            key={log.id} 
+            onClick={() => setSelectedLog(log)}
+            className="bg-dark-800 rounded-lg p-4 border border-dark-700 flex items-center gap-4 hover:border-dark-600 transition cursor-pointer"
+          >
             <div className="p-2 bg-dark-700 rounded-lg">
               {actionIcons[log.action] || <Activity className="w-4 h-4" />}
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium">{actionLabels[log.action] || log.action}</span>
                 {log.targetName && (
-                  <span className="text-blue-400 text-sm">{log.targetName}</span>
+                  <span className="text-blue-400 text-sm">→ {log.targetName}</span>
+                )}
+                {log.action === "TRUST_ADD" && log.details?.trustedBy && (
+                  <span className="text-green-400 text-xs">par {log.details.trustedBy}</span>
+                )}
+                {log.action === "TRUST_REMOVE" && log.details?.removedBy && (
+                  <span className="text-gray-400 text-xs">par {log.details.removedBy}</span>
                 )}
               </div>
               {log.reason && (
-                <p className="text-gray-400 text-sm">📝 {log.reason}</p>
+                <p className="text-gray-400 text-sm mt-1">📝 {log.reason}</p>
               )}
-              {log.details?.roleName && !log.reason && (
+              {log.details?.roleName && (
                 <p className="text-gray-400 text-sm">🎭 Rôle: {log.details.roleName}</p>
               )}
+              {log.details?.previousDuration && (
+                <p className="text-yellow-400 text-xs">Durée précédente: {log.details.previousDuration}min</p>
+              )}
+              {log.details?.newDuration && (
+                <p className="text-green-400 text-xs">Nouvelle durée: {log.details.newDuration}min</p>
+              )}
+              {log.details?.lockdownEnabled !== undefined && (
+                <p className="text-gray-400 text-xs">
+                  {log.details.lockdownEnabled ? "🔒 Serveur verrouillé" : "🔓 Serveur déverrouillé"}
+                </p>
+              )}
+              {log.details?.configKey && (
+                <p className="text-blue-400 text-xs">⚙️ {log.details.configKey}: {log.details.configOldValue} → {log.details.configNewValue}</p>
+              )}
+              {log.action === "UNBAN" && log.details?.previousBanReason && (
+                <p className="text-gray-500 text-xs mt-1">
+                  <span className="line-through opacity-50">{log.details.previousBanReason}</span>
+                </p>
+              )}
               {log.moderatorName && (
-                <p className="text-gray-500 text-xs mt-1">Par: {log.moderatorName}</p>
+                <p className="text-gray-500 text-xs mt-1">👤 Modérateur: {log.moderatorName}</p>
               )}
             </div>
             <span className="text-gray-500 text-sm">
@@ -847,6 +957,72 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
           </div>
         ))}
       </div>
+
+      {selectedLog && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setSelectedLog(null)}>
+          <div className="bg-dark-800 rounded-xl p-6 w-full max-w-lg border border-dark-700" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                {actionIcons[selectedLog.action] || <Activity className="w-5 h-5" />}
+                {actionLabels[selectedLog.action] || selectedLog.action}
+              </h3>
+              <button onClick={() => setSelectedLog(null)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <span className="text-gray-400 text-sm">Cible:</span>
+                <p className="text-white">{selectedLog.targetName || selectedLog.targetId || "Inconnu"}</p>
+              </div>
+              {selectedLog.moderatorName && (
+                <div>
+                  <span className="text-gray-400 text-sm">Modérateur:</span>
+                  <p className="text-white">{selectedLog.moderatorName}</p>
+                </div>
+              )}
+              {selectedLog.reason && (
+                <div>
+                  <span className="text-gray-400 text-sm">Raison:</span>
+                  <p className="text-white">{selectedLog.reason}</p>
+                </div>
+              )}
+              {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
+                <div>
+                  <span className="text-gray-400 text-sm">Détails:</span>
+                  <div className="bg-dark-900 rounded-lg p-3 mt-1 space-y-1">
+                    {Object.entries(selectedLog.details).map(([key, value]) => {
+                      if (key === "messages" && Array.isArray(value)) {
+                        return (
+                          <div key={key}>
+                            <span className="text-gray-500 text-sm">{key}:</span>
+                            <div className="mt-1 space-y-1">
+                              {value.map((msg: string, i: number) => (
+                                <p key={i} className="text-gray-400 text-xs bg-dark-800 rounded p-1.5 truncate">
+                                  {msg}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
+                        <p key={key} className="text-gray-300 text-sm">
+                          <span className="text-gray-500">{key}:</span> {String(value)}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div>
+                <span className="text-gray-400 text-sm">Date:</span>
+                <p className="text-white">{new Date(selectedLog.createdAt).toLocaleString("fr-FR")}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -900,7 +1076,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
 
       {tab === "overview" && <OverviewTab guild={guild} onRefresh={() => apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild))} />}
       {tab === "incidents" && <IncidentsTab incidents={incidents} onSelect={setSelectedIncident} />}
-      {tab === "events" && <EventsTab events={events} onSelect={setSelectedEvent} />}
+      {tab === "events" && <EventsTab events={events} eventsLoading={eventsLoading} onSelect={setSelectedEvent} />}
       {tab === "members" && (
         <div className="flex gap-4">
           <div className="flex-1">
@@ -1055,7 +1231,24 @@ function EventModal({ event, onClose }: { event: Event; onClose: () => void }) {
           </div>
           {event.metadata && Object.keys(event.metadata).length > 0 && (
             <div className="mt-4">
-              <p className="text-gray-400 text-xs mb-2">METADATA</p>
+              <p className="text-gray-400 text-xs mb-2">DETAILS</p>
+              {event.metadata.sanction && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-3">
+                  <p className="text-red-400 text-sm font-medium">Sanction: {event.metadata.sanction}</p>
+                </div>
+              )}
+              {event.metadata.messages && event.metadata.messages.length > 0 && (
+                <div className="bg-dark-900 rounded-lg p-3 mb-3">
+                  <p className="text-gray-400 text-xs mb-2">Messages detectes ({event.metadata.messages.length})</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {event.metadata.messages.map((msg: string, i: number) => (
+                      <div key={i} className="text-xs text-gray-300 font-mono border-l-2 border-dark-700 pl-2 py-1">
+                        {msg}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <pre className="bg-dark-900 p-3 rounded text-xs overflow-x-auto text-green-400">
                 {JSON.stringify(event.metadata, null, 2)}
               </pre>
@@ -1158,7 +1351,7 @@ function IncidentModal({ incident, onClose }: { incident: Incident; onClose: () 
   );
 }
 
-function EventsTab({ events, onSelect }: { events: Event[]; onSelect: (e: Event) => void }) {
+function EventsTab({ events, eventsLoading, onSelect }: { events: Event[]; eventsLoading?: boolean; onSelect: (e: Event) => void }) {
   const typeEmoji: Record<string, string> = {
     RAID_DETECTED: "🚨",
     SPAM_DETECTED: "📢",
@@ -1177,6 +1370,15 @@ function EventsTab({ events, onSelect }: { events: Event[]; onSelect: (e: Event)
     SUSPICIOUS_JOIN: "👤",
     INVITE_SUSPICIOUS: "📨",
   };
+
+  if (eventsLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="w-6 h-6 border-2 border-discord border-t-transparent rounded-full animate-spin" />
+        <span className="ml-3 text-gray-400">Chargement des événements...</span>
+      </div>
+    );
+  }
 
   if (events.length === 0) {
     return <p className="text-gray-500">Aucun event de securite.</p>;
@@ -1198,6 +1400,12 @@ function EventsTab({ events, onSelect }: { events: Event[]; onSelect: (e: Event)
               <SeverityBadge severity={e.severity as any} />
             </div>
             <p className="text-gray-400 text-sm">{e.description}</p>
+            {e.metadata?.messages?.length > 0 && (
+              <p className="text-xs text-yellow-500 mt-1">{e.metadata.messages.length} message(s) detecte(s)</p>
+            )}
+            {e.metadata?.sanction && (
+              <p className="text-xs text-red-400 mt-1">Sanction: {e.metadata.sanction}</p>
+            )}
             {e.channelName && <p className="text-xs text-green-500 mt-1">📍 #{e.channelName}</p>}
           </div>
           <span className="text-gray-500 text-xs">{new Date(e.createdAt).toLocaleString("fr-FR")}</span>
@@ -1218,22 +1426,48 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
   const [kickForm, setKickForm] = useState({ reason: "", sendDm: true });
   const [searchQuery, setSearchQuery] = useState("");
   const [showBannedOnly, setShowBannedOnly] = useState(false);
+  const [showBanHistory, setShowBanHistory] = useState(false);
+  const [bannedHistory, setBannedHistory] = useState<{ discordId: string; username: string; reason?: string; bannedAt: string; unbannedAt?: string; unbannedBy?: string }[]>([]);
+  const [bannedMembers, setBannedMembers] = useState<Member[]>([]);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<"all" | "banned" | "unbanned">("all");
+  const [historyDateFilter, setHistoryDateFilter] = useState<"all" | "today" | "week" | "month">("all");
+  const [bannedSearch, setBannedSearch] = useState("");
   const [filterRoles, setFilterRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [roleInput, setRoleInput] = useState("");
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
+  const loadMembers = () => {
+    apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => {
+      if (setMembers) setMembers(d.members);
+    });
+    apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500&quarantined=true`).then((d) => {
+      setBannedMembers(d.members);
+    });
+    apiFetch<{ history: any[] }>(`/api/logs/${guildId}/ban-history`).then((d) => {
+      const formatted = d.history.map((h: any) => ({
+        discordId: h.targetId || "",
+        username: h.targetName || h.targetId || "Inconnu",
+        reason: h.reason,
+        bannedAt: h.action === "BAN" ? h.createdAt : undefined,
+        unbannedAt: h.action === "UNBAN" ? h.createdAt : undefined,
+        unbannedBy: h.moderatorName,
+      }));
+      setBannedHistory(formatted);
+    });
+  };
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      onRefresh();
-    }, 30000);
+    loadMembers();
+    const interval = setInterval(() => loadMembers(), 10000);
     return () => clearInterval(interval);
-  }, [onRefresh]);
+  }, [guildId]);
 
   // Recharger les membres quand on change les filtres de rôles pour avoir les derniers roleIds
   useEffect(() => {
     const timer = setTimeout(() => {
-      onRefresh();
+      loadMembers();
     }, 100);
     return () => clearTimeout(timer);
   }, [filterRoles.length]);
@@ -1261,14 +1495,17 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
     setFilterRoles(filterRoles.filter(r => r.id !== roleId));
   };
 
-const filteredMembers = members.filter(m => {
-    const matchesSearch = m.username.toLowerCase().includes(searchQuery.toLowerCase());
+const displayMembers = showBannedOnly ? bannedMembers : members;
+  const searchTerm = showBannedOnly ? bannedSearch : searchQuery;
+  const isBannedView = showBannedOnly;
+  
+  const filteredMembers = displayMembers.filter(m => {
+    const matchesSearch = !searchTerm || m.username.toLowerCase().includes(searchTerm.toLowerCase());
     const memberRoleIds = m.roleIds || [];
     
-    // AND: le membre doit avoir TOUS les rôles sélectionnés
-    const matchesRoles = filterRoles.length === 0 || filterRoles.every(r => memberRoleIds.includes(r.id));
+    // AND: le membre doit avoir TOUS les rôles sélectionnés (pas appliqué aux bannis)
+    const matchesRoles = showBannedOnly || filterRoles.length === 0 || filterRoles.every(r => memberRoleIds.includes(r.id));
     
-    if (showBannedOnly && !m.quarantined) return false;
     return matchesSearch && matchesRoles;
   });
 
@@ -1276,8 +1513,44 @@ const filteredMembers = members.filter(m => {
     setActionLoading(discordId + action);
     setActionResult(null);
     
-    if (action === "kick" && setMembers) {
+    if ((action === "kick" || action === "unban") && setMembers) {
       setMembers(prev => prev.filter(m => m.discordId !== discordId));
+    }
+    
+    if (action === "ban") {
+      const member = members.find(m => m.discordId === discordId);
+      setBannedHistory(prev => [{
+        discordId,
+        username: member?.username || discordId,
+        reason: data?.reason || "Banni depuis le dashboard",
+        bannedAt: new Date().toISOString()
+      }, ...prev]);
+      apiFetch(`/api/logs/${guildId}`, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "BAN",
+          targetId: discordId,
+          targetName: member?.username || discordId,
+          reason: data?.reason || "Banni depuis le dashboard",
+        }),
+      });
+    }
+    
+    if (action === "unban") {
+      const member = members.find(m => m.discordId === discordId);
+      setBannedHistory(prev => prev.map(h => 
+        h.discordId === discordId 
+          ? { ...h, unbannedAt: new Date().toISOString(), unbannedBy: h.username }
+          : h
+      ));
+      apiFetch(`/api/logs/${guildId}`, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "UNBAN",
+          targetId: discordId,
+          targetName: member?.username || discordId,
+        }),
+      });
     }
     
     try {
@@ -1317,7 +1590,7 @@ const filteredMembers = members.filter(m => {
       const message = actionMessages[action] || "Action réussie";
       setActionResult({ id: discordId, success: true, message });
       
-      onRefresh();
+      loadMembers();
     } catch (e: any) {
       console.error(e);
       setActionResult({ id: discordId, success: false, message: e.message || "Erreur" });
@@ -1358,17 +1631,24 @@ const filteredMembers = members.filter(m => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
             type="text"
-            placeholder="Rechercher un membre..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={showBannedOnly ? "Rechercher dans les bannis..." : "Rechercher un membre..."}
+            value={showBannedOnly ? bannedSearch : searchQuery}
+            onChange={(e) => showBannedOnly ? setBannedSearch(e.target.value) : setSearchQuery(e.target.value)}
             className="w-full bg-dark-800 border border-dark-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-discord"
           />
         </div>
         <button
-          onClick={() => setShowBannedOnly(!showBannedOnly)}
+          onClick={() => { setShowBannedOnly(!showBannedOnly); setShowBanHistory(false); }}
           className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${showBannedOnly ? "bg-red-600 text-white" : "bg-dark-800 border border-dark-700 text-gray-400 hover:text-white"}`}
         >
           {showBannedOnly ? "✓ Bannis" : "Bannis"}
+        </button>
+        <button
+          onClick={() => { setShowBanHistory(!showBanHistory); setShowBannedOnly(false); }}
+          className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-1.5 ${showBanHistory ? "bg-purple-600 text-white" : "bg-dark-800 border border-dark-700 text-gray-400 hover:text-white"}`}
+        >
+          <History className="w-4 h-4" />
+          {showBanHistory ? "✓ Historique" : "Historique"}
         </button>
         {roles.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
@@ -1431,21 +1711,102 @@ const filteredMembers = members.filter(m => {
         )}
         <span className="text-gray-500 text-sm py-2 flex items-center gap-2">
           {filteredMembers.length} membre{filteredMembers.length !== 1 ? "s" : ""}
-          {filterRoles.length > 0 && <span className="text-discord">• {members.length} total</span>}
-          {!showBannedOnly && members.filter(m => m.quarantined).length > 0 && (
-            <span className="text-red-400">• {members.filter(m => m.quarantined).length} banni(s)</span>
+          {filterRoles.length > 0 && <span className="text-discord">• {displayMembers.length} total</span>}
+          {!showBannedOnly && bannedMembers.length > 0 && (
+            <span className="text-red-400">• {bannedMembers.length} banni(s)</span>
           )}
         </span>
       </div>
 
-      <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
+      {showBanHistory && (
+        <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden mb-4">
+          <div className="p-4 border-b border-dark-700 space-y-3">
+            <div className="flex items-center gap-4">
+              <h3 className="text-sm font-medium text-purple-400">Historique des bannissements</h3>
+              <span className="text-gray-500 text-xs">{bannedHistory.length} entrée(s)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par pseudo ou raison..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg pl-10 pr-4 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <select
+                value={historyFilter}
+                onChange={(e) => setHistoryFilter(e.target.value as any)}
+                className="bg-dark-900 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
+              >
+                <option value="all">Tous</option>
+                <option value="banned">Bannis</option>
+                <option value="unbanned">Débannis</option>
+              </select>
+              <select
+                value={historyDateFilter}
+                onChange={(e) => setHistoryDateFilter(e.target.value as any)}
+                className="bg-dark-900 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
+              >
+                <option value="all">Toute la période</option>
+                <option value="today">Aujourd'hui</option>
+                <option value="week">7 jours</option>
+                <option value="month">30 jours</option>
+              </select>
+            </div>
+          </div>
+          {bannedHistory.length === 0 ? (
+            <p className="text-gray-500 p-4 text-sm">Aucun historique de ban</p>
+          ) : (
+            <div className="divide-y divide-dark-700 max-h-96 overflow-y-auto">
+              {bannedHistory.filter(h => {
+                const matchesSearch = !historySearch || h.username.toLowerCase().includes(historySearch.toLowerCase()) || h.reason?.toLowerCase().includes(historySearch.toLowerCase());
+                const matchesStatus = historyFilter === "all" || (historyFilter === "banned" && !h.unbannedAt) || (historyFilter === "unbanned" && h.unbannedAt);
+                const hDate = new Date(h.bannedAt);
+                const now = new Date();
+                let matchesDate = true;
+                if (historyDateFilter === "today") matchesDate = hDate.toDateString() === now.toDateString();
+                else if (historyDateFilter === "week") matchesDate = hDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                else if (historyDateFilter === "month") matchesDate = hDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                return matchesSearch && matchesStatus && matchesDate;
+              }).map((h, idx) => (
+                <div key={h.discordId + idx} className="p-4 flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-medium">
+                    {h.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-sm font-medium">{h.username}</span>
+                      {h.unbannedAt && (
+                        <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full">Débanni</span>
+                      )}
+                      {!h.unbannedAt && (
+                        <span className="bg-red-500/20 text-red-400 text-xs px-2 py-0.5 rounded-full">Banni</span>
+                      )}
+                    </div>
+                    <p className="text-gray-400 text-xs">Raison: {h.reason}</p>
+                    <p className="text-gray-500 text-xs">
+                      Banni le {new Date(h.bannedAt).toLocaleString("fr-FR")}
+                      {h.unbannedAt && ` • Débanni le ${new Date(h.unbannedAt).toLocaleString("fr-FR")}`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!showBanHistory && <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-dark-700 text-gray-400 text-xs uppercase tracking-wider">
             <tr>
               <th className="py-3 px-4">Membre</th>
               <th className="py-3 px-4">Risque</th>
               <th className="py-3 px-4">Msgs</th>
-              <th className="py-3 px-4">Warns</th>
+              <th className="py-3 px-4">Mute</th>
               <th className="py-3 px-4">Statut</th>
               <th className="py-3 px-4">Actions</th>
             </tr>
@@ -1471,11 +1832,18 @@ const filteredMembers = members.filter(m => {
                   <td className="py-3 px-4 text-sm text-gray-400">{m.messageCount}</td>
                   <td className="py-3 px-4 text-sm text-gray-400">{m.warnCount}</td>
                   <td className="py-3 px-4">
-                    {isMuted && (
-                      <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs mr-1">
-                        Mute {Math.ceil((new Date(m.timedOutUntil!).getTime() - Date.now()) / 60000)}min
-                      </span>
-                    )}
+                    {isMuted && (() => {
+                      const remaining = new Date(m.timedOutUntil!).getTime() - Date.now();
+                      const minutes = Math.floor(remaining / 60000);
+                      const hours = Math.floor(minutes / 60);
+                      const days = Math.floor(hours / 24);
+                      const duration = days > 0 ? `${days}j ${hours % 24}h` : hours > 0 ? `${hours}h ${minutes % 60}min` : `${minutes}min`;
+                      return (
+                        <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs mr-1">
+                          Mute {duration}
+                        </span>
+                      );
+                    })()}
                     {m.quarantined && <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full text-xs mr-1">Banni</span>}
                     {m.trusted && <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full text-xs">Fiable</span>}
                   </td>
@@ -1491,8 +1859,8 @@ const filteredMembers = members.filter(m => {
                           {isMuted ? (
                             <button
                               onClick={() => doAction(m.discordId, "unmute", { sendDm: true })}
-                              disabled={loading}
-                              className="group relative p-2 bg-green-600/80 hover:bg-green-600 rounded-lg text-xs transition-all hover:scale-105"
+                              disabled={loading || isBannedView}
+                              className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-green-600/80 hover:bg-green-600 hover:scale-105"}`}
                               title="Retirer le mute"
                             >
                               {loading ? (
@@ -1507,8 +1875,8 @@ const filteredMembers = members.filter(m => {
                           ) : (
                             <button
                               onClick={() => { setMuteModal(m); setMuteForm({ duration: 5, reason: "", sendDm: true }); }}
-                              disabled={loading}
-                              className="group relative p-2 bg-yellow-600/80 hover:bg-yellow-600 rounded-lg text-xs transition-all hover:scale-105"
+                              disabled={loading || isBannedView}
+                              className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-yellow-600/80 hover:bg-yellow-600 hover:scale-105"}`}
                               title="Mute"
                             >
                               {loading ? (
@@ -1523,8 +1891,8 @@ const filteredMembers = members.filter(m => {
                           )}
                           <button
                             onClick={() => { setKickModal(m); setKickForm({ reason: "", sendDm: true }); }}
-                            disabled={loading}
-                            className="group relative p-2 bg-orange-600/80 hover:bg-orange-600 rounded-lg text-xs transition-all hover:scale-105"
+                            disabled={loading || isBannedView}
+                            className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-orange-600/80 hover:bg-orange-600 hover:scale-105"}`}
                             title="Exclure"
                           >
                             {loading ? (
@@ -1571,8 +1939,8 @@ const filteredMembers = members.filter(m => {
                           )}
                           <button
                             onClick={() => doAction(m.discordId, "trust", { trusted: !m.trusted })}
-                            disabled={loading}
-                            className={`group relative p-2 rounded-lg text-xs transition-all hover:scale-105 ${m.trusted ? "bg-green-600 hover:bg-green-500" : "bg-gray-600 hover:bg-gray-500"}`}
+                            disabled={loading || isBannedView}
+                            className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : m.trusted ? "bg-green-600 hover:bg-green-500 hover:scale-105" : "bg-gray-600 hover:bg-gray-500 hover:scale-105"}`}
                             title={m.trusted ? "Retirer fiable" : "Marquer fiable"}
                           >
                             {loading ? (
@@ -1594,6 +1962,7 @@ const filteredMembers = members.filter(m => {
           </tbody>
         </table>
       </div>
+      }
 
       {muteModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setMuteModal(null)}>
@@ -1807,33 +2176,98 @@ function ConfigTab({ guild, config, onUpdate }: { guild: GuildData["guild"]; con
 
       <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
         <h3 className="font-semibold mb-4">📢 Anti-Spam</h3>
+        <div className="space-y-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Détection de flood (messages rapides)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+                <span className="text-gray-400 text-sm">Max messages / 1s</span>
+                <input
+                  type="number"
+                  value={config.spamMaxMessages}
+                  onChange={(e) => updateValue("spamMaxMessages", parseInt(e.target.value))}
+                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                />
+              </div>
+              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+                <span className="text-gray-400 text-sm">Max messages / 10s</span>
+                <input
+                  type="number"
+                  value={config.spamMaxMessages10s || 8}
+                  onChange={(e) => updateValue("spamMaxMessages10s", parseInt(e.target.value))}
+                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Détection de répétition</p>
+            <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+              <span className="text-gray-400 text-sm">Messages identiques avant sanction</span>
+              <input
+                type="number"
+                value={config.spamRepeatThreshold || 3}
+                onChange={(e) => updateValue("spamRepeatThreshold", parseInt(e.target.value))}
+                className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-2">Détection de mentions</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+                <span className="text-gray-400 text-sm">Max mentions / message</span>
+                <input
+                  type="number"
+                  value={config.spamMaxMentions}
+                  onChange={(e) => updateValue("spamMaxMentions", parseInt(e.target.value))}
+                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                />
+              </div>
+              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+                <span className="text-gray-400 text-sm">Max mentions / 10s</span>
+                <input
+                  type="number"
+                  value={config.spamMaxMentions10s || 5}
+                  onChange={(e) => updateValue("spamMaxMentions10s", parseInt(e.target.value))}
+                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
+        <h3 className="font-semibold mb-4">⚖️ Sanctions</h3>
         <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Max messages</span>
-            <input
-              type="number"
-              value={config.spamMaxMessages}
-              onChange={(e) => updateValue("spamMaxMessages", parseInt(e.target.value))}
-              className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-20 text-right"
-            />
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+            <div>
+              <p className="text-sm font-medium">Durée du mute anti-spam</p>
+              <p className="text-xs text-gray-500">Durée automatique quand le bot mute pour spam</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={config.spamMuteDuration || 5}
+                onChange={(e) => updateValue("spamMuteDuration", parseInt(e.target.value))}
+                className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+              />
+              <span className="text-gray-400 text-sm">min</span>
+            </div>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Fenetre (secondes)</span>
-            <input
-              type="number"
-              value={config.spamWindow}
-              onChange={(e) => updateValue("spamWindow", parseInt(e.target.value))}
-              className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-20 text-right"
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Max mentions</span>
-            <input
-              type="number"
-              value={config.spamMaxMentions}
-              onChange={(e) => updateValue("spamMaxMentions", parseInt(e.target.value))}
-              className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-20 text-right"
-            />
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+            <div>
+              <p className="text-sm font-medium">Suppression des messages</p>
+              <p className="text-xs text-gray-500">Supprimer les messages du spammeur automatiquement</p>
+            </div>
+            <button
+              onClick={() => toggleConfig("spamAutoDelete", config.spamAutoDelete !== false)}
+              disabled={loading === "spamAutoDelete"}
+              className={`w-12 h-6 rounded-full transition ${config.spamAutoDelete !== false ? "bg-green-500" : "bg-dark-600"}`}
+            >
+              <div className={`w-5 h-5 bg-white rounded-full transition ${config.spamAutoDelete !== false ? "translate-x-6" : "translate-x-0.5"}`} />
+            </button>
           </div>
         </div>
       </div>

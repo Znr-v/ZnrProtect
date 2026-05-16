@@ -48,9 +48,12 @@ model GuildConfig {
 
   // Anti-spam
   spamMaxMessages      Int     @default(5)
-  spamWindow           Int     @default(5) // secondes
-  spamMaxMentions      Int     @default(5)
-  spamMentionWindow    Int     @default(10) // secondes
+  spamMaxMessages10s   Int     @default(8)
+  spamRepeatThreshold  Int     @default(3)
+  spamMaxMentions      Int     @default(3)
+  spamMaxMentions10s   Int     @default(5)
+  spamMuteDuration     Int     @default(5) // minutes
+  spamAutoDelete       Boolean @default(true)
 
   // Anti-phishing
   phishingEnabled      Boolean @default(true)
@@ -139,6 +142,7 @@ enum EventType {
   MASS_KICK
   CHANNEL_DELETE
   WEBHOOK_CREATED
+  WEBHOOK_SPAM
   ROLE_ESCALATION
   MODERATOR_ANOMALY
   CANARY_TRIGGERED

@@ -24,39 +24,38 @@ export async function eventsRoutes(app: FastifyInstance) {
       prisma.securityEvent.count({ where }),
     ]);
 
-    // Enrichir avec les noms Discord
-    const enrichedEvents = await Promise.all(
-      events.map(async (e) => {
-        let actorName = e.actorId || null;
-        let channelName = null;
+    // Enrichir avec les noms Discord - OPTIMISÉ
+    let guild = null;
+    let channelCache = new Map();
+    
+    if (client && client.isReady()) {
+      try { guild = await client.guilds.fetch(guildId); } catch {}
+    }
 
-        if (e.actorId && client) {
-          try {
-            const guild = await client.guilds.fetch(guildId);
-            if (guild) {
-              const member = await guild.members.fetch(e.actorId).catch(() => null);
-              if (member) actorName = member.user.tag;
-              else {
-                const user = await client.users.fetch(e.actorId).catch(() => null);
-                if (user) actorName = user.tag;
-              }
-            }
-          } catch {}
-        }
+    const enrichedEvents = events.map((e) => {
+      // Use metadata authorName for webhooks first
+      let actorName = e.metadata?.authorName || null;
+      let channelName = null;
 
-        if (e.channelId && client) {
-          try {
-            const guild = await client.guilds.fetch(guildId);
-            if (guild) {
-              const channel = await guild.channels.fetch(e.channelId).catch(() => null);
-              if (channel) channelName = channel.name;
-            }
-          } catch {}
-        }
+      // Only fetch from Discord if needed and available
+      if (!actorName && e.actorId && guild) {
+        try {
+          actorName = e.actorId;
+        } catch {}
+      }
 
-        return { ...e, actorName, channelName };
-      })
-    );
+      if (e.channelId && guild && !channelCache.has(e.channelId)) {
+        try {
+          const channel = guild.channels.cache.get(e.channelId);
+          if (channel) {
+            channelCache.set(e.channelId, channel.name);
+          }
+        } catch {}
+      }
+      channelName = channelCache.get(e.channelId) || null;
+
+      return { ...e, actorName, channelName };
+    });
 
     return { events: enrichedEvents, total, page: parseInt(page) };
   });

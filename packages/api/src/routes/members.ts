@@ -175,18 +175,26 @@ export async function memberRoutes(app: FastifyInstance) {
       try {
         const guild = await client.guilds.fetch(guildId);
         if (guild) {
-          const memberRoleMap = new Map<string, string[]>();
-          
-          // Always fetch all members to get avatars
           try {
             await guild.members.fetch();
           } catch {}
           
+          const discordMemberIds = new Set(guild.members.cache.keys());
+          
+          // Filter: only show members who are on the Discord server
+          const showBanned = quarantined === "true";
+          members = dbMembers.filter(m => {
+            const isOnServer = discordMemberIds.has(m.discordId);
+            const isBanned = m.quarantined;
+            return isOnServer || (showBanned && isBanned);
+          });
+          
+          const memberRoleMap = new Map<string, string[]>();
           for (const [userId, member] of guild.members.cache) {
             memberRoleMap.set(userId, member.roles.cache.map(r => r.id));
           }
           
-          members = dbMembers.map(m => {
+          members = members.map(m => {
             const discordMember = guild.members.cache.get(m.discordId);
             let avatar: string | null = null;
             if (discordMember?.user.avatar) {

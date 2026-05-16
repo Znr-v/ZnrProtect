@@ -19,6 +19,22 @@ export async function botLogsRoutes(app: FastifyInstance) {
     return { logs };
   });
 
+  // Get ban history for a guild
+  app.get("/:guildId/ban-history", async (request) => {
+    const { guildId } = request.params as { guildId: string };
+    const prisma = (request as any).prisma;
+
+    const history = await prisma.botActionLog.findMany({
+      where: {
+        guildId,
+        action: { in: ["BAN", "UNBAN"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return { history };
+  });
+
   // Create a log entry
   app.post("/:guildId", async (request) => {
     const { guildId } = request.params as { guildId: string };

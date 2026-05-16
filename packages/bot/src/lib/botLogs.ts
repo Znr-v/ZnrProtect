@@ -11,8 +11,9 @@ export async function logBotAction(
     details?: any;
   }
 ) {
+  console.log(`[BOTLOG] Creating log: action=${action}, targetId=${data.targetId}, guildId=${guildId}`);
   try {
-    await prisma.botActionLog.create({
+    const result = await prisma.botActionLog.create({
       data: {
         guildId,
         action,
@@ -22,6 +23,7 @@ export async function logBotAction(
         details: data.details,
       },
     });
+    console.log(`[BOTLOG] Created log ID: ${result.id}`);
   } catch (e) {
     console.error("Failed to log bot action:", e);
   }

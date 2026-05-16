@@ -235,7 +235,14 @@ export async function modActionsRoutes(app: FastifyInstance) {
       const guild = await client.guilds.fetch(guildId);
       if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
 
+      const banEntry = await guild.bans.fetch(memberId).catch(() => null);
+      const banReason = banEntry?.reason || null;
+
       await guild.bans.remove(memberId).catch(() => null);
+
+      const memberData = await prisma.member.findFirst({
+        where: { discordId: memberId, guildId },
+      });
 
       await prisma.member.updateMany({
         where: { discordId: memberId, guildId },
@@ -244,6 +251,8 @@ export async function modActionsRoutes(app: FastifyInstance) {
 
       await logBotAction(prisma, guildId, "UNBAN", {
         targetId: memberId,
+        targetName: memberData?.username || memberId,
+        details: banReason ? { previousBanReason: banReason } : undefined,
       });
 
       return reply.send({ success: true, message: "Membre débanni" });
@@ -264,8 +273,13 @@ export async function modActionsRoutes(app: FastifyInstance) {
         data: { trusted },
       });
 
+      const memberData = await prisma.member.findFirst({
+        where: { discordId: memberId, guildId },
+      });
+
       await logBotAction(prisma, guildId, trusted ? "TRUST_ADD" : "TRUST_REMOVE", {
         targetId: memberId,
+        targetName: memberData?.username || memberId,
       });
 
       return reply.send({ success: true, message: trusted ? "Membre marqué comme fiable" : "Marqueur fiable retiré" });
