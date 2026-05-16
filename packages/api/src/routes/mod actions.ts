@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyReply } from "fastify";
+import { getDiscordIdFromRequest, requirePermission, DASHBOARD_PERMISSIONS, logAudit } from "../lib/permissions";
 
 const logBotAction = async (prisma: any, guildId: string, action: string, data: any) => {
   try {
@@ -24,6 +25,14 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { guildId, memberId } = request.params as { guildId: string; memberId: string };
     const { reason, sendDm } = (request.body as any) || {};
     const client = (request as any).client;
+    const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_MEMBERS);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
@@ -53,7 +62,6 @@ export async function modActionsRoutes(app: FastifyInstance) {
       const banReason = reason || "Banni depuis le dashboard";
       await member.ban({ reason: banReason });
 
-      const prisma = (request as any).prisma;
       await prisma.member.updateMany({
         where: { discordId: memberId, guildId },
         data: { quarantined: true },
@@ -63,6 +71,12 @@ export async function modActionsRoutes(app: FastifyInstance) {
         targetId: memberId,
         targetName: member.user.tag,
         reason,
+      });
+
+      await logAudit(prisma, discordId!, "BAN_MEMBER", {
+        guildId,
+        targetId: memberId,
+        metadata: { reason },
       });
 
       return reply.send({ success: true, message: `Membre banni: ${member.user.tag}` });
@@ -76,6 +90,14 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { guildId, memberId } = request.params as { guildId: string; memberId: string };
     const { reason, sendDm } = (request.body as any) || {};
     const client = (request as any).client;
+    const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_MEMBERS);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
@@ -105,7 +127,6 @@ export async function modActionsRoutes(app: FastifyInstance) {
       const kickReason = reason || "Expulsé depuis le dashboard";
       await member.kick(kickReason);
 
-      const prisma = (request as any).prisma;
       await prisma.member.deleteMany({
         where: { discordId: memberId, guildId },
       });
@@ -114,6 +135,12 @@ export async function modActionsRoutes(app: FastifyInstance) {
         targetId: memberId,
         targetName: member.user.tag,
         reason,
+      });
+
+      await logAudit(prisma, discordId!, "KICK_MEMBER", {
+        guildId,
+        targetId: memberId,
+        metadata: { reason },
       });
 
       return reply.send({ success: true, message: `Membre expulsé: ${member.user.tag}` });
@@ -128,6 +155,13 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { duration, reason, sendDm } = (request.body as any) || { duration: 5, sendDm: true };
     const client = (request as any).client;
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_MEMBERS);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
@@ -175,6 +209,12 @@ export async function modActionsRoutes(app: FastifyInstance) {
         details: { duration, endDate: timeoutUntil.toISOString() },
       });
 
+      await logAudit(prisma, discordId!, "TIMEOUT_MEMBER", {
+        guildId,
+        targetId: memberId,
+        metadata: { duration, reason },
+      });
+
       return reply.send({ success: true, message: `Membre mute pour ${duration} minute(s)` });
     } catch (e: any) {
       console.error("Timeout error:", e);
@@ -187,6 +227,13 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { sendDm } = (request.body as any) || { sendDm: true };
     const client = (request as any).client;
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_MEMBERS);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
@@ -217,6 +264,11 @@ export async function modActionsRoutes(app: FastifyInstance) {
         targetName: member.user.tag,
       });
 
+      await logAudit(prisma, discordId!, "UNMUTE_MEMBER", {
+        guildId,
+        targetId: memberId,
+      });
+
       return reply.send({ success: true, message: "Mute retiré" });
     } catch (e: any) {
       console.error("Unmute error:", e);
@@ -228,6 +280,13 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { guildId, memberId } = request.params as { guildId: string; memberId: string };
     const client = (request as any).client;
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_MEMBERS);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
@@ -255,6 +314,12 @@ export async function modActionsRoutes(app: FastifyInstance) {
         details: banReason ? { previousBanReason: banReason } : undefined,
       });
 
+      await logAudit(prisma, discordId!, "UNBAN_MEMBER", {
+        guildId,
+        targetId: memberId,
+        metadata: { previousBanReason: banReason },
+      });
+
       return reply.send({ success: true, message: "Membre débanni" });
     } catch (e: any) {
       console.error("Unban error:", e);
@@ -266,6 +331,13 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { guildId, memberId } = request.params as { guildId: string; memberId: string };
     const { trusted } = (request.body as any) || {};
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_MEMBERS);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       await prisma.member.updateMany({
@@ -282,6 +354,11 @@ export async function modActionsRoutes(app: FastifyInstance) {
         targetName: memberData?.username || memberId,
       });
 
+      await logAudit(prisma, discordId!, trusted ? "ADD_TRUST" : "REMOVE_TRUST", {
+        guildId,
+        targetId: memberId,
+      });
+
       return reply.send({ success: true, message: trusted ? "Membre marqué comme fiable" : "Marqueur fiable retiré" });
     } catch (e: any) {
       return reply.status(500).send({ error: e.message });
@@ -293,6 +370,13 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { roleId } = (request.body as any) || {};
     const client = (request as any).client;
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_ROLES);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
@@ -315,6 +399,12 @@ export async function modActionsRoutes(app: FastifyInstance) {
         details: { roleId, roleName: role.name },
       });
 
+      await logAudit(prisma, discordId!, "REMOVE_ROLE", {
+        guildId,
+        targetId: memberId,
+        metadata: { roleId, roleName: role.name },
+      });
+
       return reply.send({ success: true, message: `Rôle "${role.name}" retiré de ${member.user.tag}` });
     } catch (e: any) {
       console.error("Remove role error:", e);
@@ -326,14 +416,20 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { guildId } = request.params as { guildId: string };
     const { active } = (request.body as any) || {};
     const client = (request as any).client;
+    const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_GUILD);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
 
       const guild = await client.guilds.fetch(guildId);
       if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
-
-      const prisma = (request as any).prisma;
 
       if (active) {
         await prisma.guild.update({
@@ -371,6 +467,11 @@ export async function modActionsRoutes(app: FastifyInstance) {
         details: { channelCount: guild.channels.cache.size },
       });
 
+      await logAudit(prisma, discordId!, active ? "LOCKDOWN_ON" : "LOCKDOWN_OFF", {
+        guildId,
+        metadata: { channelCount: guild.channels.cache.size },
+      });
+
       return reply.send({ success: true, message: active ? "Lockdown activé" : "Lockdown désactivé" });
     } catch (e: any) {
       console.error("Lockdown error:", e);
@@ -383,6 +484,13 @@ export async function modActionsRoutes(app: FastifyInstance) {
     const { action, roleId } = (request.body as any) || {};
     const client = (request as any).client;
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_ROLES);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
@@ -403,6 +511,11 @@ export async function modActionsRoutes(app: FastifyInstance) {
           targetName: member.user.tag,
           reason: `Rôle @${role.name} ajouté`,
         });
+        await logAudit(prisma, discordId!, "ADD_ROLE", {
+          guildId,
+          targetId: memberId,
+          metadata: { roleId, roleName: role.name },
+        });
         return reply.send({ success: true, message: `Rôle @${role.name} ajouté` });
       } else if (action === "remove") {
         await member.roles.remove(role, "Retiré depuis le dashboard");
@@ -410,6 +523,11 @@ export async function modActionsRoutes(app: FastifyInstance) {
           targetId: memberId,
           targetName: member.user.tag,
           reason: `Rôle @${role.name} retiré`,
+        });
+        await logAudit(prisma, discordId!, "REMOVE_ROLE", {
+          guildId,
+          targetId: memberId,
+          metadata: { roleId, roleName: role.name },
         });
         return reply.send({ success: true, message: `Rôle @${role.name} retiré` });
       }

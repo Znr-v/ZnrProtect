@@ -1,4 +1,5 @@
 import { BotContext } from "../index";
+import { calculateRiskScore } from "../modules/riskScore";
 
 export async function onReady(ctx: BotContext) {
   // Sync guilds to database
@@ -18,6 +19,46 @@ export async function onReady(ctx: BotContext) {
     });
   }
   console.log("[+] Guilds synchronisées avec la DB");
+
+  // Scan all existing members into DB
+  for (const [, guild] of ctx.client.guilds.cache) {
+    console.log(`[+] Scan des membres de ${guild.name}...`);
+    try {
+      await guild.members.fetch();
+    } catch (e) {
+      console.error(`[!] Impossible de fetch les membres de ${guild.name}:`, e);
+      continue;
+    }
+
+    let synced = 0;
+    for (const [, member] of guild.members.cache) {
+      if (member.user.bot) continue;
+      try {
+        const dbMember = await ctx.prisma.member.upsert({
+          where: { discordId_guildId: { discordId: member.id, guildId: guild.id } },
+          create: {
+            discordId: member.id,
+            guildId: guild.id,
+            username: member.user.username,
+            accountAge: member.user.createdAt,
+          },
+          update: {
+            username: member.user.username,
+          },
+        });
+
+        // Calculate risk score if not already set
+        if (dbMember.riskScore === 0) {
+          await calculateRiskScore(ctx, member, dbMember);
+        }
+
+        synced++;
+      } catch (e) {
+        console.error(`[!] Erreur sync membre ${member.id}:`, e);
+      }
+    }
+    console.log(`[+] ${synced} membres synchronisés pour ${guild.name}`);
+  }
 
   // Take initial audit snapshot for each guild
   for (const [, guild] of ctx.client.guilds.cache) {

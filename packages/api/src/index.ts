@@ -13,6 +13,8 @@ import { eventsRoutes } from "./routes/events";
 import { configRoutes } from "./routes/config";
 import { modActionsRoutes } from "./routes/mod actions";
 import { botLogsRoutes } from "./routes/bot-logs";
+import { adminAuthRoutes } from "./routes/admin-auth";
+import { getDiscordIdFromRequest } from "./lib/permissions";
 
 const prisma = new PrismaClient();
 
@@ -35,6 +37,12 @@ app.decorateRequest("client", null);
 app.addHook("onRequest", async (request) => {
   (request as any).prisma = prisma;
   (request as any).client = discordClient;
+
+  const discordId = await getDiscordIdFromRequest(request);
+  if (discordId) {
+    const user = await prisma.dashboardUser.findUnique({ where: { discordId } });
+    (request as any).dashboardUser = user;
+  }
 });
 
 // Routes
@@ -47,6 +55,12 @@ app.register(eventsRoutes, { prefix: "/api/events" });
 app.register(configRoutes, { prefix: "/api/config" });
 app.register(modActionsRoutes, { prefix: "/api" });
 app.register(botLogsRoutes, { prefix: "/api/logs" });
+app.register(adminAuthRoutes, { prefix: "/api/admin" });
+
+app.setErrorHandler((error, request, reply) => {
+  console.error(error);
+  reply.status(500).send({ error: error.message || "Erreur interne" });
+});
 
 const PORT = parseInt(process.env.API_PORT || "4000");
 

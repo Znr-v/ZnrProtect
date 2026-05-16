@@ -1,10 +1,36 @@
 import { FastifyInstance } from "fastify";
+import { getDiscordIdFromRequest, requirePermission, DASHBOARD_PERMISSIONS, requireGuildAccess } from "../lib/permissions";
 
 export async function guildRoutes(app: FastifyInstance) {
   // List guilds where bot is present
-  app.get("/", async (request) => {
+  app.get("/", async (request, reply) => {
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    if (!discordId) {
+      return reply.status(401).send({ error: "Non authentifié" });
+    }
+
+    const dashboardUser = await prisma.dashboardUser.findUnique({ where: { discordId } });
+    if (!dashboardUser || !dashboardUser.approved) {
+      return reply.status(401).send({ error: "Non authentifié" });
+    }
+
+    const guildPerms = await prisma.dashboardGuildPermission.findMany({
+      where: { userId: dashboardUser.id },
+    });
+    
+    // Si l'utilisateur est VIEWER, on ne lui donne accès qu'aux serveurs où il a explicitement au moins 1 permission
+    const allowedGuildIds = dashboardUser.role === "VIEWER"
+      ? guildPerms.filter((gp: any) => gp.permissions && gp.permissions.length > 0).map((gp: any) => gp.guildId)
+      : guildPerms.map((gp: any) => gp.guildId);
+
+    if (allowedGuildIds.length === 0) {
+      return { guilds: [] };
+    }
+
     const guilds = await prisma.guild.findMany({
+      where: { id: { in: allowedGuildIds } },
       select: {
         id: true,
         name: true,
@@ -18,9 +44,16 @@ export async function guildRoutes(app: FastifyInstance) {
   });
 
   // Guild detail
-  app.get("/:guildId", async (request) => {
+  app.get("/:guildId", async (request, reply) => {
     const { guildId } = request.params as { guildId: string };
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requireGuildAccess(prisma, discordId, guildId);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     const guild = await prisma.guild.findUnique({
       where: { id: guildId },
@@ -38,14 +71,22 @@ export async function guildRoutes(app: FastifyInstance) {
       },
     });
 
-    if (!guild) return { error: "Not found" };
+    if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
     return { guild };
   });
 
   // Get guild roles
-  app.get("/:guildId/roles", async (request) => {
+  app.get("/:guildId/roles", async (request, reply) => {
     const { guildId } = request.params as { guildId: string };
     const client = (request as any).client;
+    const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requireGuildAccess(prisma, discordId, guildId);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     try {
       if (!client) return { error: "Client Discord non connecté" };

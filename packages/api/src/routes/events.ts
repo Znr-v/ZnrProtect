@@ -1,11 +1,15 @@
 import { FastifyInstance } from "fastify";
+import { getDiscordIdFromRequest, requireGuildAccess } from "../lib/permissions";
 
 export async function eventsRoutes(app: FastifyInstance) {
   // Security events for a guild
   app.get("/:guildId", async (request) => {
     const { guildId } = request.params as { guildId: string };
-    const { type, severity, page = "1", limit = "50" } = request.query as any;
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
+    const { type, severity, page = "1", limit = "50" } = request.query as any;
     const client = (request as any).client;
 
     const where: any = { guildId };
@@ -63,8 +67,11 @@ export async function eventsRoutes(app: FastifyInstance) {
   // Detected links
   app.get("/:guildId/links", async (request) => {
     const { guildId } = request.params as { guildId: string };
-    const { page = "1", limit = "50" } = request.query as any;
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
+    const { page = "1", limit = "50" } = request.query as any;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -84,7 +91,9 @@ export async function eventsRoutes(app: FastifyInstance) {
   // Detected secrets
   app.get("/:guildId/secrets", async (request) => {
     const { guildId } = request.params as { guildId: string };
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
 
     const secrets = await prisma.detectedSecret.findMany({
       where: { guildId },
@@ -106,7 +115,9 @@ export async function eventsRoutes(app: FastifyInstance) {
   // Permission changes
   app.get("/:guildId/permissions", async (request) => {
     const { guildId } = request.params as { guildId: string };
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
 
     const changes = await prisma.permissionChange.findMany({
       where: { guildId },

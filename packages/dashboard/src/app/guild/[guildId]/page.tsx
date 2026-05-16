@@ -1,12 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon, Search, Filter, History } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, setAuthToken } from "@/lib/api";
+import { useDashboardUser } from "@/lib/usePermissions";
+import { MentionSearch } from "@/components/MentionSearch";
 import { StatCard } from "@/components/StatCard";
-import { SeverityBadge } from "@/components/SeverityBadge";
 
+import { SeverityBadge } from "@/components/SeverityBadge";
 type GuildData = {
   guild: {
     id: string;
@@ -20,7 +23,7 @@ type GuildData = {
 
 type Incident = { id: string; title: string; severity: string; status: string; description?: string; createdAt: string; _count: { events: number; actions: number }; channelName?: string; events?: any[] };
 type Event = { id: string; type: string; severity: string; actorId: string; actorName?: string; channelId: string; channelName?: string; description: string; metadata: any; createdAt: string };
-type Member = { id: string; discordId: string; username: string; riskScore: number; quarantined: boolean; trusted: boolean; messageCount: number; warnCount: number; timedOutUntil?: string | null; avatar?: string | null };
+type Member = { id: string; discordId: string; username: string; riskScore: number; quarantined: boolean; trusted: boolean; messageCount: number; warnCount: number; timedOutUntil?: string | null; avatar?: string | null; roleIds?: string[] };
 type BotActionLog = { id: string; action: string; targetId?: string; targetName?: string; moderatorId?: string; moderatorName?: string; reason?: string; details?: any; createdAt: string };
 
 type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
@@ -28,7 +31,7 @@ type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
 function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string; onUpdate?: (m: Member) => void }) {
   const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
   const isMuted = member.timedOutUntil && new Date(member.timedOutUntil) > new Date();
-  const [detailView, setDetailView] = useState<"overview" | "mutes" | "kicks" | "bans" | "events" | "risk" | "messages" | "roles">("overview");
+  const [detailView, setDetailView] = useState<"overview" | "mutes" | "kicks" | "bans" | "warns" | "events" | "risk" | "messages" | "roles">("overview");
   const [detailData, setDetailData] = useState<{ botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any; avatar?: string | null } | null>(null);
   const [messages, setMessages] = useState<any[] | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -637,6 +640,20 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
 export default function GuildPage() {
   const { guildId } = useParams<{ guildId: string }>();
+  const { data: session } = useSession();
+  const { getGuildRole, loaded: roleLoaded } = useDashboardUser();
+  const role = getGuildRole(guildId) || "VIEWER";
+  
+  const allTabs: { key: Tab; label: string; icon: React.ReactNode; roles: string[] }[] = [
+    { key: "overview", label: "Vue d'ensemble", icon: <Shield className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "incidents", label: "Incidents", icon: <AlertTriangle className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "events", label: "Events", icon: <Activity className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "members", label: "Membres", icon: <Users className="w-4 h-4" />, roles: ["OWNER", "ADMIN", "MODERATOR"] },
+    { key: "logs", label: "Logs", icon: <ScrollText className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "config", label: "Config", icon: <Settings className="w-4 h-4" />, roles: ["OWNER"] },
+  ];
+  const tabs = allTabs.filter(t => t.roles.includes(role));
+
   const [guild, setGuild] = useState<GuildData["guild"] | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -648,37 +665,73 @@ export default function GuildPage() {
   const [logs, setLogs] = useState<BotActionLog[]>([]);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [memberActions, setMemberActions] = useState<BotActionLog[]>([]);
+  const [tokenReady, setTokenReady] = useState(false);
+
+  // Set auth token as soon as session is available
+  useEffect(() => {
+    const token = (session as any)?.apiToken;
+    console.log("[DEBUG] session status:", session ? "present" : "null", "| apiToken:", token ? token.slice(0, 20) + "..." : "MISSING");
+    if (token) {
+      setAuthToken(token);
+      setTokenReady(true);
+    }
+  }, [session]);
+
+  // Auto-switch to first available tab if current is forbidden
+  useEffect(() => {
+    if (roleLoaded && tabs.length > 0 && !tabs.find(t => t.key === tab)) {
+      setTab(tabs[0].key);
+    }
+  }, [roleLoaded, role, tab, tabs]);
 
   useEffect(() => {
-    apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild));
-    apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => setMembers(d.members));
-  }, [guildId]);
+    if (!tokenReady) return;
+    console.log("[DEBUG] tokenReady, fetching guild", guildId, "and members");
+    apiFetch<GuildData>(`/api/guilds/${guildId}`)
+      .then((d) => { console.log("[DEBUG] guild response:", d); setGuild(d.guild); })
+      .catch((e) => console.error("[DEBUG] guild fetch error:", e));
+    apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`)
+      .then((d) => { console.log("[DEBUG] members response: count=", d.members?.length, d); setMembers(d.members); })
+      .catch((e) => console.error("[DEBUG] members fetch error:", e));
+  }, [guildId, tokenReady]);
 
   useEffect(() => {
+    if (!tokenReady) return;
+    console.log("[DEBUG] tab changed to:", tab);
     if (tab === "incidents") {
-      apiFetch<{ incidents: Incident[] }>(`/api/incidents/${guildId}`).then((d) => setIncidents(d.incidents));
+      apiFetch<{ incidents: Incident[] }>(`/api/incidents/${guildId}`)
+        .then((d) => { console.log("[DEBUG] incidents:", d); setIncidents(d.incidents); })
+        .catch((e) => console.error("[DEBUG] incidents error:", e));
     }
     if (tab === "events") {
       setEventsLoading(true);
-      apiFetch<{ events: Event[] }>(`/api/events/${guildId}`).then((d) => { setEvents(d.events); setEventsLoading(false); });
+      apiFetch<{ events: Event[] }>(`/api/events/${guildId}`)
+        .then((d) => { console.log("[DEBUG] events:", d); setEvents(d.events); setEventsLoading(false); })
+        .catch((e) => console.error("[DEBUG] events error:", e));
     }
     if (tab === "members") {
-      apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => setMembers(d.members));
+      apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`)
+        .then((d) => { console.log("[DEBUG] members (tab):", d); setMembers(d.members); })
+        .catch((e) => console.error("[DEBUG] members (tab) error:", e));
     }
     if (tab === "logs") {
-      apiFetch<{ logs: BotActionLog[] }>(`/api/logs/${guildId}`).then((d) => setLogs(d.logs));
+      apiFetch<{ logs: BotActionLog[] }>(`/api/logs/${guildId}`)
+        .then((d) => { console.log("[DEBUG] logs:", d); setLogs(d.logs); })
+        .catch((e) => console.error("[DEBUG] logs error:", e));
     }
-  }, [tab, guildId]);
+  }, [tab, guildId, tokenReady]);
 
   useEffect(() => {
+    if (!tokenReady) return;
     if (selectedMember) {
       apiFetch<{ logs: BotActionLog[] }>(`/api/logs/${guildId}?targetId=${selectedMember.discordId}`).then((d) => setMemberActions(d.logs));
     }
-  }, [selectedMember, guildId]);
+  }, [selectedMember, guildId, tokenReady]);
 
   useEffect(() => {
+    if (!tokenReady) return;
     if (guild) apiFetch<GuildData>(`/api/guilds/${guildId}`).then((d) => setGuild(d.guild));
-  }, [guildId]);
+  }, [guildId, tokenReady]);
 
   if (!guild) {
     return (
@@ -692,31 +745,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [periodFilter, setPeriodFilter] = useState<string>("all");
-  const [showAtDropdown, setShowAtDropdown] = useState(false);
   const [selectedLog, setSelectedLog] = useState<BotActionLog | null>(null);
-
-  const atPos = search.indexOf("@");
-  const searchAfterAt = atPos !== -1 ? search.slice(atPos + 1).toLowerCase() : "";
-  const showDropdown = search.includes("@") && showAtDropdown && members.length > 0;
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setSearch(val);
-    if (val.includes("@") && val.indexOf("@") === val.lastIndexOf("@")) {
-      setShowAtDropdown(true);
-    } else if (!val.includes("@")) {
-      setShowAtDropdown(false);
-    }
-  };
-
-  const selectMember = (username: string) => {
-    setSearch(username);
-    setShowAtDropdown(false);
-  };
-
-  const displayedMembers = searchAfterAt
-    ? members.filter(m => (m.username || "").toLowerCase().includes(searchAfterAt)).slice(0, 8)
-    : members.slice(0, 8);
 
   const actionIcons: Record<string, React.ReactNode> = {
     BAN: <Ban className="w-4 h-4 text-red-400" />,
@@ -809,39 +838,12 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
   return (
     <div className="space-y-4">
       <div className="bg-dark-800 rounded-xl border border-dark-700 p-4 space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder="Rechercher dans les logs... (raison, utilisateur, @membre)"
-            value={search}
-            onChange={handleSearchChange}
-            onFocus={() => search.includes("@") && setShowAtDropdown(true)}
-            onBlur={() => setTimeout(() => setShowAtDropdown(false), 200)}
-            className="w-full bg-dark-900 border border-dark-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-          />
-          {showDropdown && (
-            <div className="absolute top-full left-0 mt-1 w-72 bg-dark-800 border border-dark-700 rounded-lg shadow-xl z-[100] max-h-48 overflow-y-auto">
-              {displayedMembers.map((member: any) => (
-                <button
-                  key={member.discordId}
-                  onClick={() => selectMember(member.username)}
-                  className="w-full text-left px-3 py-2 hover:bg-dark-700 flex items-center gap-3"
-                >
-                  {member.avatar ? (
-                      <img src={member.avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-discord flex items-center justify-center text-xs font-medium text-white">
-                        {member.username ? member.username.charAt(0).toUpperCase() : "?"}
-                      </div>
-                    )}
-                  <span className="text-white text-sm">{member.username || "Inconnu"}</span>
-                  {member.riskScore >= 81 && <span className="ml-auto text-red-400 text-xs">🔴</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <MentionSearch
+          users={members}
+          value={search}
+          onChange={setSearch}
+          placeholder="Rechercher dans les logs... (raison, utilisateur, @membre)"
+        />
 
         <div className="flex flex-wrap gap-2">
           {actionFilters.map(filter => (
@@ -1026,15 +1028,6 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
     </div>
   );
 }
-
-  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "overview", label: "Vue d'ensemble", icon: <Shield className="w-4 h-4" /> },
-    { key: "incidents", label: "Incidents", icon: <AlertTriangle className="w-4 h-4" /> },
-    { key: "events", label: "Events", icon: <Activity className="w-4 h-4" /> },
-    { key: "members", label: "Membres", icon: <Users className="w-4 h-4" /> },
-    { key: "logs", label: "Logs", icon: <ScrollText className="w-4 h-4" /> },
-    { key: "config", label: "Config", icon: <Settings className="w-4 h-4" /> },
-  ];
 
   return (
     <div>
@@ -1495,7 +1488,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
     setFilterRoles(filterRoles.filter(r => r.id !== roleId));
   };
 
-const displayMembers = showBannedOnly ? bannedMembers : members;
+  const displayMembers = showBannedOnly ? bannedMembers : members;
   const searchTerm = showBannedOnly ? bannedSearch : searchQuery;
   const isBannedView = showBannedOnly;
   
@@ -1625,19 +1618,30 @@ const displayMembers = showBannedOnly ? bannedMembers : members;
   }
 
   return (
-    <>
-      <div className="flex items-center gap-2 mb-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder={showBannedOnly ? "Rechercher dans les bannis..." : "Rechercher un membre..."}
-            value={showBannedOnly ? bannedSearch : searchQuery}
-            onChange={(e) => showBannedOnly ? setBannedSearch(e.target.value) : setSearchQuery(e.target.value)}
-            className="w-full bg-dark-800 border border-dark-700 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-discord"
-          />
-        </div>
-        <button
+      <>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="flex-1 relative">
+            {showBannedOnly ? (
+              <>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
+                <input
+                  type="text"
+                  placeholder="Rechercher dans les bannis..."
+                  value={bannedSearch}
+                  onChange={(e) => setBannedSearch(e.target.value)}
+                  className="w-full bg-theme-tertiary border border-theme-border rounded-lg pl-9 pr-4 py-2.5 text-sm text-theme-primary placeholder-theme-muted focus:outline-none focus:border-discord transition-colors"
+                />
+              </>
+            ) : (
+              <MentionSearch
+                users={members}
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Rechercher un membre (ou @)..."
+              />
+            )}
+          </div>
+          <button
           onClick={() => { setShowBannedOnly(!showBannedOnly); setShowBanHistory(false); }}
           className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${showBannedOnly ? "bg-red-600 text-white" : "bg-dark-800 border border-dark-700 text-gray-400 hover:text-white"}`}
         >

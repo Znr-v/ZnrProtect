@@ -2,12 +2,13 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Shield } from "lucide-react";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Navbar() {
   const { data: session } = useSession();
 
   return (
-    <nav className="bg-dark-800 border-b border-dark-700 sticky top-0 z-50">
+    <nav className="bg-theme-secondary border-b border-theme-border sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
         <Link href="/" className="flex items-center gap-3">
           <div className="w-9 h-9 bg-discord rounded-lg flex items-center justify-center">
@@ -17,9 +18,11 @@ export function Navbar() {
         </Link>
 
         <div className="flex items-center gap-4">
+          <ThemeToggle />
+          <div className="w-px h-6 bg-theme-tertiary" />
           {session ? (
             <>
-              <Link href="/" className="text-sm text-gray-400 hover:text-white transition">
+              <Link href="/" className="text-sm text-theme-secondary hover:text-white transition">
                 Serveurs
               </Link>
               <div className="flex items-center gap-2">
@@ -29,8 +32,8 @@ export function Navbar() {
                 <span className="text-sm font-medium">{session.user?.name}</span>
               </div>
               <button
-                onClick={() => signOut()}
-                className="text-gray-400 hover:text-red-400 text-sm transition"
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="text-theme-secondary hover:text-red-400 text-sm transition"
               >
                 Déconnexion
               </button>

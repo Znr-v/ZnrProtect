@@ -1,11 +1,15 @@
 import { FastifyInstance } from "fastify";
+import { getDiscordIdFromRequest, requireGuildAccess } from "../lib/permissions";
 
 export async function incidentRoutes(app: FastifyInstance) {
   // List incidents for a guild
   app.get("/:guildId", async (request) => {
     const { guildId } = request.params as { guildId: string };
-    const { status, severity, page = "1", limit = "20" } = request.query as any;
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
+    const { status, severity, page = "1", limit = "20" } = request.query as any;
     const client = (request as any).client;
 
     const where: any = { guildId };
@@ -56,6 +60,7 @@ export async function incidentRoutes(app: FastifyInstance) {
   // Incident detail with timeline
   app.get("/detail/:incidentId", async (request) => {
     const { incidentId } = request.params as { incidentId: string };
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
 
     const incident = await prisma.incident.findUnique({
@@ -66,6 +71,10 @@ export async function incidentRoutes(app: FastifyInstance) {
       },
     });
 
+    if (incident) {
+      await requireGuildAccess(prisma, discordId ?? undefined, incident.guildId);
+    }
+
     return { incident };
   });
 
@@ -73,7 +82,13 @@ export async function incidentRoutes(app: FastifyInstance) {
   app.patch("/:incidentId", async (request) => {
     const { incidentId } = request.params as { incidentId: string };
     const { status } = request.body as { status: string };
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+
+    const existing = await prisma.incident.findUnique({ where: { id: incidentId } });
+    if (existing) {
+      await requireGuildAccess(prisma, discordId ?? undefined, existing.guildId);
+    }
 
     const incident = await prisma.incident.update({
       where: { id: incidentId },

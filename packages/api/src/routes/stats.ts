@@ -1,8 +1,12 @@
 import { FastifyInstance } from "fastify";
+import { getDiscordIdFromRequest, requireGuildAccess } from "../lib/permissions";
 
 export async function statsRoutes(app: FastifyInstance) {
   // Global stats
-  app.get("/", async (request) => {
+  app.get("/", async (request, reply) => {
+    const discordId = await getDiscordIdFromRequest(request);
+    if (!discordId) return reply.status(401).send({ error: "Non authentifié" });
+
     const prisma = (request as any).prisma;
     const now = new Date();
     const h24 = new Date(now.getTime() - 86400000);
@@ -43,8 +47,11 @@ export async function statsRoutes(app: FastifyInstance) {
   // Event type breakdown
   app.get("/breakdown/:guildId", async (request) => {
     const { guildId } = request.params as { guildId: string };
-    const { days = "7" } = request.query as any;
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
+    const { days = "7" } = request.query as any;
 
     const since = new Date(Date.now() - parseInt(days) * 86400000);
 

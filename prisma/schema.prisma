@@ -379,10 +379,45 @@ model InviteStats {
 
 // ─── Dashboard users ───
 
+enum DashboardRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  VIEWER
+}
+
 model DashboardUser {
-  id          String   @id @default(cuid())
-  discordId   String   @unique
+  id          String       @id @default(cuid())
+  discordId   String       @unique
   username    String
   avatar      String?
-  lastLoginAt DateTime @default(now())
+  role        DashboardRole @default(VIEWER)
+  approved    Boolean      @default(false)
+  approvedBy  String?
+  createdAt   DateTime     @default(now())
+  lastLoginAt DateTime?
+  guildPermissions DashboardGuildPermission[]
+}
+
+model DashboardGuildPermission {
+  id          String   @id @default(cuid())
+  userId      String
+  user        DashboardUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guildId     String
+  role        DashboardRole @default(VIEWER)
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, guildId])
+}
+
+model DashboardAuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  guildId   String?
+  action    String
+  targetId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
 }

@@ -1,32 +1,36 @@
 import { FastifyInstance } from "fastify";
-
-const logBotAction = async (prisma: any, guildId: string, action: string, data: any) => {
-  try {
-    await prisma.botActionLog.create({
-      data: { guildId, action, ...data },
-    });
-  } catch (e) {
-    console.error("Failed to log bot action:", e);
-  }
-};
+import { getDiscordIdFromRequest, requirePermission, DASHBOARD_PERMISSIONS, logAudit } from "../lib/permissions";
 
 export async function configRoutes(app: FastifyInstance) {
   // Get guild config
-  app.get("/:guildId", async (request) => {
+  app.get("/:guildId", async (request, reply) => {
     const { guildId } = request.params as { guildId: string };
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_GUILD);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     const config = await prisma.guildConfig.findUnique({ where: { guildId } });
     return { config };
   });
 
   // Update guild config (with versioning)
-  app.patch("/:guildId", async (request) => {
+  app.patch("/:guildId", async (request, reply) => {
     const { guildId } = request.params as { guildId: string };
     const body = request.body as any;
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
 
-    // Save current config as version before updating
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_GUILD);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
+
     const currentConfig = await prisma.guildConfig.findUnique({ where: { guildId } });
     if (currentConfig) {
       await prisma.configVersion.create({
@@ -39,7 +43,6 @@ export async function configRoutes(app: FastifyInstance) {
       });
     }
 
-    // Remove metadata fields
     const { _changedBy, _changelog, ...updateData } = body;
 
     const config = await prisma.guildConfig.upsert({
@@ -48,18 +51,25 @@ export async function configRoutes(app: FastifyInstance) {
       update: updateData,
     });
 
-    await logBotAction(prisma, guildId, "CONFIG_CHANGE", {
-      reason: body._changelog || "Mise à jour de la configuration",
-      details: { changes: Object.keys(updateData) },
+    await logAudit(prisma, discordId!, "CONFIG_CHANGE", {
+      guildId,
+      metadata: { changelog: body._changelog, changes: Object.keys(updateData) },
     });
 
     return { config };
   });
 
   // Config history (for diff/rollback)
-  app.get("/:guildId/history", async (request) => {
+  app.get("/:guildId/history", async (request, reply) => {
     const { guildId } = request.params as { guildId: string };
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_GUILD);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     const versions = await prisma.configVersion.findMany({
       where: { guildId },
@@ -71,9 +81,16 @@ export async function configRoutes(app: FastifyInstance) {
   });
 
   // Rollback config
-  app.post("/:guildId/rollback/:versionId", async (request) => {
+  app.post("/:guildId/rollback/:versionId", async (request, reply) => {
     const { guildId, versionId } = request.params as { guildId: string; versionId: string };
     const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_GUILD);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
 
     const version = await prisma.configVersion.findUnique({ where: { id: versionId } });
     if (!version) return { error: "Version introuvable" };
@@ -84,6 +101,11 @@ export async function configRoutes(app: FastifyInstance) {
     await prisma.guildConfig.update({
       where: { guildId },
       data: rest,
+    });
+
+    await logAudit(prisma, discordId!, "CONFIG_ROLLBACK", {
+      guildId,
+      metadata: { versionId },
     });
 
     return { success: true, message: "Configuration restaurée" };

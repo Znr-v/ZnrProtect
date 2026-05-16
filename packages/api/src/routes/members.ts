@@ -1,9 +1,14 @@
 import { FastifyInstance } from "fastify";
+import { getDiscordIdFromRequest, requireGuildAccess } from "../lib/permissions";
 
 export async function memberRoutes(app: FastifyInstance) {
   // Get recent messages from a member in the guild
-  app.get("/:guildId/:discordId/messages", async (request, reply) => {
-    const { guildId, discordId } = request.params as { guildId: string; discordId: string };
+  app.get("/:guildId/:memberDiscordId/messages", async (request, reply) => {
+    const { guildId, memberDiscordId } = request.params as { guildId: string; memberDiscordId: string };
+    const discordId = await getDiscordIdFromRequest(request);
+    const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
     const client = (request as any).client;
 
     try {
@@ -18,7 +23,7 @@ export async function memberRoutes(app: FastifyInstance) {
       for (const [, channel] of channels) {
         try {
           const fetched = await channel.messages.fetch({ limit: 100 });
-          const userMessages = fetched.filter(m => m.author.id === discordId).first(10);
+          const userMessages = fetched.filter(m => m.author.id === memberDiscordId).first(10);
           
           for (const msg of userMessages) {
             messages.push({
@@ -44,13 +49,16 @@ export async function memberRoutes(app: FastifyInstance) {
     }
   });
   // Get member details with history
-  app.get("/:guildId/:discordId/details", async (request) => {
-    const { guildId, discordId } = request.params as { guildId: string; discordId: string };
+  app.get("/:guildId/:memberDiscordId/details", async (request) => {
+    const { guildId, memberDiscordId } = request.params as { guildId: string; memberDiscordId: string };
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
     const client = (request as any).client;
 
     const member = await prisma.member.findUnique({
-      where: { discordId_guildId: { discordId, guildId } },
+      where: { discordId_guildId: { discordId: memberDiscordId, guildId } },
     });
 
     if (!member) return { error: "Membre introuvable" };
@@ -61,13 +69,13 @@ export async function memberRoutes(app: FastifyInstance) {
       try {
         const guild = await client.guilds.fetch(guildId);
         if (guild) {
-          const discordMember = await guild.members.fetch(discordId).catch(() => null);
+          const discordMember = await guild.members.fetch(memberDiscordId).catch(() => null);
           if (discordMember) {
             roleIds = discordMember.roles.cache.map(r => r.id);
             const hash = discordMember.user.avatar;
             if (hash) {
               const ext = hash.startsWith("a_") ? "gif" : "png";
-              avatar = `https://cdn.discordapp.com/avatars/${discordId}/${hash}.${ext}`;
+              avatar = `https://cdn.discordapp.com/avatars/${memberDiscordId}/${hash}.${ext}`;
             } else {
               const defaultIndex = Number(discordMember.user.discriminator) % 5;
               avatar = `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
@@ -79,17 +87,17 @@ export async function memberRoutes(app: FastifyInstance) {
 
     const [botLogs, securityEvents, detectedLinks, riskScores] = await Promise.all([
       prisma.botActionLog.findMany({
-        where: { guildId, targetId: discordId },
+        where: { guildId, targetId: memberDiscordId },
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
       prisma.securityEvent.findMany({
-        where: { guildId, actorId: discordId },
+        where: { guildId, actorId: memberDiscordId },
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
       prisma.detectedLink.findMany({
-        where: { guildId, actorId: discordId },
+        where: { guildId, actorId: memberDiscordId },
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
@@ -104,8 +112,12 @@ export async function memberRoutes(app: FastifyInstance) {
   });
 
   // Get member Discord roles and all server roles
-  app.get("/:guildId/:discordId/roles", async (request, reply) => {
-    const { guildId, discordId } = request.params as { guildId: string; discordId: string };
+  app.get("/:guildId/:memberDiscordId/roles", async (request, reply) => {
+    const { guildId, memberDiscordId } = request.params as { guildId: string; memberDiscordId: string };
+    const discordId = await getDiscordIdFromRequest(request);
+    const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
     const client = (request as any).client;
 
     try {
@@ -114,7 +126,7 @@ export async function memberRoutes(app: FastifyInstance) {
       const guild = await client.guilds.fetch(guildId);
       if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
 
-      const discordMember = await guild.members.fetch(discordId).catch(() => null);
+      const discordMember = await guild.members.fetch(memberDiscordId).catch(() => null);
       
       const userRoles = discordMember?.roles.cache
         .filter((r: any) => r.name !== "@everyone")
@@ -144,6 +156,10 @@ export async function memberRoutes(app: FastifyInstance) {
   // List members for a guild (with risk filtering)
   app.get("/:guildId", async (request) => {
     const { guildId } = request.params as { guildId: string };
+    const discordId = await getDiscordIdFromRequest(request);
+    const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
     const {
       minRisk = "0",
       quarantined,
@@ -152,7 +168,6 @@ export async function memberRoutes(app: FastifyInstance) {
       sort = "riskScore",
       order = "desc",
     } = request.query as any;
-    const prisma = (request as any).prisma;
     const client = (request as any).client;
 
     const where: any = { guildId, riskScore: { gte: parseInt(minRisk) } };
@@ -225,6 +240,7 @@ export async function memberRoutes(app: FastifyInstance) {
   // Member detail with risk history
   app.get("/detail/:memberId", async (request) => {
     const { memberId } = request.params as { memberId: string };
+    const discordId = await getDiscordIdFromRequest(request);
     const prisma = (request as any).prisma;
 
     const member = await prisma.member.findUnique({
@@ -233,6 +249,10 @@ export async function memberRoutes(app: FastifyInstance) {
         riskScores: { orderBy: { createdAt: "desc" }, take: 20 },
       },
     });
+
+    if (member) {
+      await requireGuildAccess(prisma, discordId ?? undefined, member.guildId);
+    }
 
     return { member };
   });
