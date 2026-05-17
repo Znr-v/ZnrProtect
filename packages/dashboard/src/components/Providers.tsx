@@ -2,6 +2,7 @@
 import { SessionProvider } from "next-auth/react";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { setToastHandler } from "@/lib/api";
+import { I18nProvider } from "@/lib/i18n";
 
 type ToastContextType = {
   toast: { message: string; type: "success" | "error" } | null;
@@ -28,16 +29,18 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <SessionProvider>
-      <ToastContext.Provider value={{ toast, showToast }}>
-        {children}
-        {toast && (
-          <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in ${
-            toast.type === "success" ? "bg-green-600" : "bg-red-600"
-          }`}>
-            {toast.message}
-          </div>
-        )}
-      </ToastContext.Provider>
+      <I18nProvider>
+        <ToastContext.Provider value={{ toast, showToast }}>
+          {children}
+          {toast && (
+            <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in ${
+              toast.type === "success" ? "bg-green-600" : "bg-red-600"
+            }`}>
+              {toast.message}
+            </div>
+          )}
+        </ToastContext.Provider>
+      </I18nProvider>
     </SessionProvider>
   );
 }

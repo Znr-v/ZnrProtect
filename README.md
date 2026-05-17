@@ -2,6 +2,21 @@
 
 ## Architecture
 
+**LanguageSwitcher Component**
+
+```tsx
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+
+// Usage example
+<LanguageSwitcher />
+```
+
+The component includes accessibility attributes:
+- `aria-label` and `title` toggle between languages.
+- `aria-live="polite"` on the language code span ensures screen readers announce changes.
+
+## Architecture
+
 ```
 ├── prisma/                   Schéma de base de données (PostgreSQL)
 ├── packages/

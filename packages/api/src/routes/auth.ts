@@ -243,6 +243,7 @@ export async function authRoutes(app: FastifyInstance) {
       username: user.username,
       avatar: user.avatar,
       approved: user.approved,
+      language: user.language,
       guilds: freshPerms.map((gp: any) => {
         // Le rôle global de l'utilisateur a priorité s'il est supérieur ou égal au rôle de la guild
         // Mais pour simplifier, comme il n'y a pas d'UI pour les rôles par guild, on retourne le rôle global
@@ -297,4 +298,53 @@ export async function authRoutes(app: FastifyInstance) {
         : guildPerm.permissions || [],
     };
   });
+
+  // Get language preference of authenticated user
+  app.get("/language", async (request, reply) => {
+    const discordId = await getDiscordIdFromRequest(request);
+    if (!discordId) {
+      return reply.status(401).send({ error: "Non authentifié" });
+    }
+
+    const prisma = (request as any).prisma;
+    const user = await prisma.dashboardUser.findUnique({
+      where: { discordId },
+      select: { language: true },
+    });
+
+    if (!user) {
+      return reply.status(404).send({ error: "Utilisateur non trouvé" });
+    }
+
+    return { language: user.language };
+  });
+
+  // Update language preference of authenticated user
+  const updateLanguageHandler = async (request: any, reply: any) => {
+    const discordId = await getDiscordIdFromRequest(request);
+    if (!discordId) {
+      return reply.status(401).send({ error: "Non authentifié" });
+    }
+
+    const { language } = request.body as { language?: string };
+    if (!language) {
+      return reply.status(400).send({ error: "Langue requise" });
+    }
+
+    if (language !== "fr" && language !== "en") {
+      return reply.status(400).send({ error: "Langue invalide. Les valeurs autorisées sont 'fr' ou 'en'." });
+    }
+
+    const prisma = request.prisma;
+    const user = await prisma.dashboardUser.update({
+      where: { discordId },
+      data: { language },
+      select: { language: true },
+    });
+
+    return { success: true, language: user.language };
+  };
+
+  app.put("/language", updateLanguageHandler);
+  app.patch("/language", updateLanguageHandler);
 }

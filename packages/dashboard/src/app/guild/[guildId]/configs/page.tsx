@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { apiFetch, setAuthToken } from "@/lib/api";
 import { useDashboardUser } from "@/lib/usePermissions";
+import { useI18n } from "@/lib/i18n";
 
 type GuildRole = {
   id: string;
@@ -56,6 +57,7 @@ export default function ConfigsPage() {
   const { data: session } = useSession();
   const { getGuildRole } = useDashboardUser();
   const userRole = getGuildRole(guildId) || "VIEWER";
+  const { t } = useI18n();
 
   const [roles, setRoles] = useState<GuildRole[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,7 @@ export default function ConfigsPage() {
       setRoles(data.roles || []);
     } catch (e: any) {
       console.error("Failed to load roles:", e);
-      setError(e.message || "Erreur lors du chargement des rôles");
+      setError(e.message || t("errorLoadingRoles"));
     }
     setLoading(false);
   };
@@ -344,9 +346,9 @@ export default function ConfigsPage() {
           <Settings className="w-6 h-6 text-discord" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Configurations</h1>
+          <h1 className="text-2xl font-bold">{t("tabConfig")}</h1>
           <p className="text-theme-secondary text-sm">
-            Gestion des rôles et permissions
+            {t("roleManagement")}
           </p>
         </div>
       </div>
@@ -361,7 +363,7 @@ export default function ConfigsPage() {
           }`}
         >
           <Shield className="w-4 h-4 inline mr-2" />
-          Rôles Panel ({panelRoles.length})
+          {t("panelRoles")} ({panelRoles.length})
         </button>
         {isOwner && (
           <button
@@ -373,7 +375,7 @@ export default function ConfigsPage() {
             }`}
           >
             <Hash className="w-4 h-4 inline mr-2" />
-            Rôles Discord ({discordRoles.length})
+            {t("discordRoles")} ({discordRoles.length})
           </button>
         )}
         {activeTab === "discord" && isOwner && (
@@ -383,7 +385,7 @@ export default function ConfigsPage() {
             className="ml-auto px-4 py-2 rounded-lg font-medium bg-theme-tertiary text-theme-secondary hover:text-theme-primary transition flex items-center gap-2 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            Synchroniser
+            {t("sync")}
           </button>
         )}
       </div>
@@ -399,7 +401,7 @@ export default function ConfigsPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Shield className="w-5 h-5 text-discord" />
-              Rôles du Panel
+              {t("panelRolesTitle")}
             </h2>
             {canManageRoles && (
               <button
@@ -407,7 +409,7 @@ export default function ConfigsPage() {
                 className="px-3 py-1.5 bg-discord hover:bg-discord-hover text-white rounded-lg text-sm font-medium transition flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
-                Ajouter un rôle
+                {t("addRole")}
               </button>
             )}
           </div>
@@ -417,7 +419,7 @@ export default function ConfigsPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Hash className="w-5 h-5 text-discord" />
-              Rôles Discord
+              {t("discordRoles")}
             </h2>
             {isOwner && (
               <div className="flex gap-2">
@@ -426,7 +428,7 @@ export default function ConfigsPage() {
                   className="px-3 py-1.5 bg-discord hover:bg-discord-hover text-white rounded-lg text-sm font-medium transition flex items-center gap-1"
                 >
                   <Plus className="w-4 h-4" />
-                  Ajouter
+                  {t("add")}
                 </button>
                 <button
                   onClick={handleSync}
@@ -434,7 +436,7 @@ export default function ConfigsPage() {
                   className="px-3 py-1.5 bg-theme-tertiary hover:bg-theme-border text-theme-secondary rounded-lg text-sm font-medium transition flex items-center gap-1"
                 >
                   <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-                  Sync
+                  {t("sync")}
                 </button>
               </div>
             )}
@@ -443,22 +445,20 @@ export default function ConfigsPage() {
 
         {activeTab === "panel" && (
           <p className="text-theme-secondary text-sm mb-4">
-            Créez des rôles pour organiser les permissions dans le dashboard.
-            Ces rôles sont différents des rôles Discord.
+            {t("panelRolesDesc")}
           </p>
         )}
 
         {activeTab === "discord" && (
           <p className="text-theme-secondary text-sm mb-4">
-            Ces rôles sont synchronisés avec les rôles du serveur Discord.
-            Configurez les permissions Panel pour chaque rôle Discord.
+            {t("discordRolesDesc")}
           </p>
         )}
 
         {showDiscordAddForm && activeTab === "discord" && isOwner && (
           <div className="bg-theme-tertiary/50 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium">Nouveau rôle Discord</h3>
+              <h3 className="font-medium">{t("newDiscordRoleTitle")}</h3>
               <button
                 onClick={() => {
                   setShowDiscordAddForm(false);
@@ -475,17 +475,17 @@ export default function ConfigsPage() {
             <div className="space-y-3">
               <div className="flex gap-3 items-end">
                 <div className="flex-1">
-                  <label className="text-theme-secondary text-xs block mb-1">Nom du rôle</label>
+                  <label className="text-theme-secondary text-xs block mb-1">{t("newRoleName")}</label>
                   <input
                     type="text"
                     value={newDiscordRoleName}
                     onChange={(e) => setNewDiscordRoleName(e.target.value)}
-                    placeholder="Ex: Helper"
+                    placeholder={t("exHelperPlaceholder")}
                     className="w-full bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-primary focus:outline-none focus:border-discord"
                   />
                 </div>
                 <div>
-                  <label className="text-theme-secondary text-xs block mb-1">Couleur</label>
+                  <label className="text-theme-secondary text-xs block mb-1">{t("color")}</label>
                   <input
                     type="color"
                     value={newDiscordRoleColor}
@@ -495,7 +495,7 @@ export default function ConfigsPage() {
                 </div>
               </div>
               <div>
-                <label className="text-theme-secondary text-xs block mb-1">Permissions Discord:</label>
+                <label className="text-theme-secondary text-xs block mb-1">{t("discordPermissionsLabel")}</label>
                 <div className="flex flex-wrap gap-1">
                   {ALL_DISCORD_PERMISSIONS.map((perm) => (
                     <button
@@ -519,7 +519,7 @@ export default function ConfigsPage() {
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-1"
                 >
                   <Check className="w-4 h-4" />
-                  Créer le rôle
+                  {t("createRoleBtn")}
                 </button>
               </div>
             </div>
@@ -529,7 +529,7 @@ export default function ConfigsPage() {
         {showAddForm && activeTab === "panel" && (
           <div className="bg-theme-tertiary/50 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium">Nouveau rôle Panel</h3>
+              <h3 className="font-medium">{t("newPanelRoleTitle")}</h3>
               <button
                 onClick={() => {
                   setShowAddForm(false);
@@ -546,19 +546,19 @@ export default function ConfigsPage() {
               <div className="flex gap-3 items-end">
                 <div className="flex-1">
                   <label className="text-theme-secondary text-xs block mb-1">
-                    Nom du rôle
+                    {t("newRoleName")}
                   </label>
                   <input
                     type="text"
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
-                    placeholder="Ex: Modérateur"
+                    placeholder={t("exModeratorPlaceholder")}
                     className="w-full bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-primary focus:outline-none focus:border-discord"
                   />
                 </div>
                 <div>
                   <label className="text-theme-secondary text-xs block mb-1">
-                    Couleur
+                    {t("color")}
                   </label>
                   <input
                     type="color"
@@ -570,7 +570,7 @@ export default function ConfigsPage() {
               </div>
               <div>
                 <label className="text-theme-secondary text-xs block mb-1">
-                  Permissions Panel:
+                  {t("panelPermissionsLabel")}
                 </label>
                 <div className="flex flex-wrap gap-1">
                   {ALL_PANEL_PERMISSIONS.map((perm) => (
@@ -595,7 +595,7 @@ export default function ConfigsPage() {
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-1"
                 >
                   <Check className="w-4 h-4" />
-                  Créer le rôle
+                  {t("createRoleBtn")}
                 </button>
               </div>
             </div>
@@ -606,8 +606,8 @@ export default function ConfigsPage() {
           <div className="text-center py-8">
             <p className="text-theme-muted mb-4">
               {activeTab === "panel"
-                ? "Aucun rôle panel configuré"
-                : "Aucun rôle Discord configuré. Synchronisez pour importer les rôles."}
+                ? t("noPanelRolesConfigured")
+                : t("noDiscordRolesConfigured")}
             </p>
             {activeTab === "panel" && canManageRoles && (
               <div className="flex flex-col items-center gap-3">
@@ -616,7 +616,7 @@ export default function ConfigsPage() {
                   className="px-4 py-2 bg-discord hover:bg-discord-hover text-white rounded-lg text-sm font-medium transition inline-flex items-center gap-1"
                 >
                   <Plus className="w-4 h-4" />
-                  Créer un rôle personnalisé
+                  {t("createCustomRoleBtn")}
                 </button>
                 <button
                   onClick={handleCreateDefaultRoles}
@@ -624,7 +624,7 @@ export default function ConfigsPage() {
                   className="px-4 py-2 bg-theme-tertiary hover:bg-theme-border text-theme-secondary rounded-lg text-sm font-medium transition inline-flex items-center gap-1 disabled:opacity-50"
                 >
                   <Shield className="w-4 h-4" />
-                  {actionLoading === "create-default" ? "Création..." : "Créer les rôles par défaut (Owner, Admin, Mod, Viewer)"}
+                  {actionLoading === "create-default" ? t("creatingLabel") : t("createDefaultRolesBtn")}
                 </button>
               </div>
             )}
@@ -635,7 +635,7 @@ export default function ConfigsPage() {
                 className="px-4 py-2 bg-discord hover:bg-discord-hover text-white rounded-lg text-sm font-medium transition inline-flex items-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-                Synchroniser avec Discord
+                {t("syncWithDiscordBtn")}
               </button>
             )}
           </div>
@@ -660,7 +660,7 @@ export default function ConfigsPage() {
                         }
                         className="w-8 h-8 rounded cursor-pointer"
                         disabled={false}
-                        title="Changer la couleur"
+                        title={t("changeColorTooltip")}
                       />
                       <input
                         type="text"
@@ -681,13 +681,13 @@ export default function ConfigsPage() {
                             disabled={actionLoading === role.id}
                             className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm text-white"
                           >
-                            Sauvegarder
+                            {t("save")}
                           </button>
                           <button
                             onClick={() => setEditingRole(null)}
                             className="px-3 py-1 text-theme-secondary hover:text-theme-primary"
                           >
-                            Annuler
+                            {t("cancel")}
                           </button>
                         </div>
                       )}
@@ -696,7 +696,7 @@ export default function ConfigsPage() {
                     {(!role.discordRoleId || (role.discordRoleId && role.discordRoleId.startsWith("manual-"))) && (
                       <div className="mb-3">
                         <span className="text-theme-secondary text-xs block mb-1">
-                          Permissions Panel:
+                          {t("panelPermissionsLabel")}
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {ALL_PANEL_PERMISSIONS.map((perm) => (
@@ -719,7 +719,7 @@ export default function ConfigsPage() {
                     {(role.discordRoleId && !role.discordRoleId.startsWith("manual-")) && (
                       <div>
                         <span className="text-theme-secondary text-xs block mb-1">
-                          Permissions Discord:
+                          {t("discordPermissionsLabel")}
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {ALL_DISCORD_PERMISSIONS.map((perm) => (
@@ -760,7 +760,7 @@ export default function ConfigsPage() {
                           />
                         </button>
                         <label className="text-theme-secondary text-sm cursor-pointer">
-                          Afficher séparément dans la liste des membres
+                          {t("showSeparatelyLabel")}
                         </label>
                       </div>
                     )}
@@ -794,7 +794,7 @@ export default function ConfigsPage() {
                         <span className="font-medium">{role.name}</span>
                         {role.discordRoleId && (
                           <span className="text-theme-muted text-xs ml-2">
-                            (Discord)
+                            {t("discordSuffix")}
                           </span>
                         )}
                       </div>
@@ -820,7 +820,7 @@ export default function ConfigsPage() {
                           </span>
                         ))}
                         {role.panelPermissions.length === 0 && role.discordPermissions.length === 0 && (
-                          <span className="text-theme-muted text-xs">Aucune permission</span>
+                          <span className="text-theme-muted text-xs">{t("noPermissionLabel")}</span>
                         )}
                       </div>
                       {canManageRoles && (
@@ -828,7 +828,7 @@ export default function ConfigsPage() {
                           <button
                             onClick={() => setEditingRole({ ...role })}
                             className="p-1.5 text-theme-secondary hover:text-theme-primary"
-                            title="Modifier"
+                            title={t("editTooltip")}
                           >
                             <Edit className="w-4 h-4" />
                           </button>
@@ -836,7 +836,7 @@ export default function ConfigsPage() {
                             <button
                               onClick={() => setConfirmDelete(role)}
                               className="p-1.5 text-theme-secondary hover:text-red-400"
-                              title="Supprimer"
+                              title={t("deleteTooltip")}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -857,24 +857,24 @@ export default function ConfigsPage() {
           <div className="bg-theme-secondary rounded-xl p-6 w-full max-w-md border border-theme-border">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
               <Trash2 className="w-5 h-5 text-red-400" />
-              Supprimer {confirmDelete.name} ?
+              {t("delete")} {confirmDelete.name} ?
             </h3>
             <p className="text-theme-secondary mb-4">
-              Cette action est irréversible. Le rôle sera supprimé.
+              {t("confirmDeleteRoleDesc")}
             </p>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setConfirmDelete(null)}
                 className="px-4 py-2 text-theme-secondary hover:text-theme-primary transition"
               >
-                Annuler
+                {t("cancel")}
               </button>
               <button
                 onClick={() => handleDeleteRole(confirmDelete.id)}
                 disabled={actionLoading === confirmDelete.id}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-white font-medium transition disabled:opacity-50"
               >
-                {actionLoading === confirmDelete.id ? "..." : "Supprimer"}
+                {actionLoading === confirmDelete.id ? "..." : t("delete")}
               </button>
             </div>
           </div>

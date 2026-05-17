@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { translate } from "../lib/i18n";
 import { getDiscordIdFromRequest, requireGuildAccess } from "../lib/permissions";
 
 export async function eventsRoutes(app: FastifyInstance) {
@@ -58,7 +58,10 @@ export async function eventsRoutes(app: FastifyInstance) {
       }
       channelName = channelCache.get(e.channelId) || null;
 
-      return { ...e, actorName, channelName };
+      const lang = (request as any).lang as "en" | "fr";
+    const translatedType = translate(e.type, lang);
+    const translatedSeverity = translate(e.severity, lang);
+    return { ...e, actorName, channelName, type: translatedType, severity: translatedSeverity };
     });
 
     return { events: enrichedEvents, total, page: parseInt(page) };

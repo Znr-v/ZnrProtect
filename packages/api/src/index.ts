@@ -35,9 +35,11 @@ app.register(cookie);
 // Attach prisma and discord client to request
 app.decorateRequest("prisma", null);
 app.decorateRequest("client", null);
+import { getLanguage } from "./lib/i18n";
 app.addHook("onRequest", async (request) => {
   (request as any).prisma = prisma;
   (request as any).client = discordClient;
+  (request as any).lang = getLanguage(request);
 
   const discordId = await getDiscordIdFromRequest(request);
   if (discordId) {

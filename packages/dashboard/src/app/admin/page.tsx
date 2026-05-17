@@ -7,6 +7,7 @@ import { ArrowLeft, Users, Shield, Trash2, Edit, X, Settings, Search, UserPlus, 
 import { MentionSearch } from "@/components/MentionSearch";
 import { apiFetch, setAuthToken } from "@/lib/api";
 import { useDashboardUser, DashboardRole } from "@/lib/usePermissions";
+import { useI18n } from "@/lib/i18n";
 
 type User = {
   id: string;
@@ -39,6 +40,7 @@ export default function AdminPage() {
   const { data: session, status } = useSession();
   const { approved, loaded, hasAccess, guilds } = useDashboardUser();
   const router = useRouter();
+  const { t } = useI18n();
 
   // Check if user is OWNER of at least one guild (since global OWNER gets OWNER on all guilds)
   const isGlobalOwner = guilds.some(g => g.role === "OWNER");
@@ -427,7 +429,7 @@ export default function AdminPage() {
       <div className="bg-theme-secondary rounded-xl border border-theme-border p-4 mb-6">
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <Users className="w-5 h-5 text-discord" />
-          Rechercher ou ajouter un utilisateur
+          {t("searchOrAddUser")}
         </h2>
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
@@ -444,7 +446,7 @@ export default function AdminPage() {
             onChange={(e) => setTableRoleFilter(e.target.value as any)}
             className="bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-primary focus:outline-none focus:border-discord"
           >
-            <option value="ALL">Tous les rôles</option>
+            <option value="ALL">{t("allRoles")}</option>
             <option value="OWNER">Owner</option>
             <option value="ADMIN">Admin</option>
             <option value="MODERATOR">Modérateur</option>
@@ -456,7 +458,7 @@ export default function AdminPage() {
             className="bg-discord hover:bg-discord-hover text-white px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-2 whitespace-nowrap shrink-0"
           >
             <Search className="w-4 h-4" />
-            Chercher / Ajouter
+            {t("searchAdd")}
           </button>
         </div>
 
@@ -515,7 +517,7 @@ export default function AdminPage() {
           }`}
         >
           <Users className="w-4 h-4 inline mr-2" />
-          Membres Panel
+          {t("panelRoles")}
         </button>
         <button
           onClick={() => setAdminView("discord-roles")}
@@ -526,7 +528,7 @@ export default function AdminPage() {
           }`}
         >
           <Shield className="w-4 h-4 inline mr-2" />
-          Rôles Discord
+          {t("discordRoles")}
         </button>
       </div>
 
@@ -536,7 +538,7 @@ export default function AdminPage() {
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-4">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <Users className="w-6 h-6 text-discord" />
-          Membres du Staff
+          {t("staffMembers")}
         </h2>
       </div>
 
@@ -552,10 +554,10 @@ export default function AdminPage() {
           <table className="w-full text-left">
             <thead className="bg-theme-tertiary text-theme-secondary text-xs uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-4">Utilisateur</th>
-                <th className="py-3 px-4">Rôle</th>
-                <th className="py-3 px-4">Dernière connexion</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-4">{t("user")}</th>
+                <th className="py-3 px-4">{t("role")}</th>
+                <th className="py-3 px-4">{t("lastLogin")}</th>
+                <th className="py-3 px-4 text-right">{t("actions")}</th>
               </tr>
             </thead>
               <tbody>

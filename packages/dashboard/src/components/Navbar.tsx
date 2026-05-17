@@ -1,11 +1,13 @@
 "use client";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { Shield } from "lucide-react";
+import { Shield, Globe } from "lucide-react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useI18n } from "@/lib/i18n";
 
 export function Navbar() {
   const { data: session } = useSession();
+  const { t, language, setLanguage } = useI18n();
 
   return (
     <nav className="bg-theme-secondary border-b border-theme-border sticky top-0 z-50">
@@ -18,12 +20,19 @@ export function Navbar() {
         </Link>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setLanguage(language === "fr" ? "en" : "fr")}
+            className="p-2 text-sm font-semibold tracking-wide rounded-lg transition hover:bg-theme-tertiary flex items-center gap-1.5"
+            title={language === "fr" ? "Switch to English" : "Passer en Français"}
+          >
+            <span className="sr-only">{language}</span>
+          </button>
           <ThemeToggle />
           <div className="w-px h-6 bg-theme-tertiary" />
           {session ? (
             <>
               <Link href="/" className="text-sm text-theme-secondary hover:text-theme-primary transition">
-                Serveurs
+                {t("servers")}
               </Link>
               <div className="flex items-center gap-2">
                 {session.user?.image && (
@@ -35,7 +44,7 @@ export function Navbar() {
                 onClick={() => signOut({ callbackUrl: "/" })}
                 className="text-theme-secondary hover:text-red-400 text-sm transition"
               >
-                Déconnexion
+                {t("logout")}
               </button>
             </>
           ) : (
@@ -43,7 +52,7 @@ export function Navbar() {
               onClick={() => signIn("discord")}
               className="bg-discord hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
             >
-              Connexion avec Discord
+              {t("loginWithDiscord")}
             </button>
           )}
         </div>

@@ -6,6 +6,7 @@ import {
 } from "discord.js";
 import { BotCommand } from "./index";
 import { BotContext } from "../index";
+import { t } from "../lib/i18n";
 
 export const setupCommand: BotCommand = {
   data: new SlashCommandBuilder()
@@ -41,18 +42,24 @@ export const setupCommand: BotCommand = {
 
     switch (sub) {
       case "quarantine":
-        return handleSetupQuarantine(ctx, interaction);
+        await handleSetupQuarantine(ctx, interaction);
+        break;
       case "canary":
-        return handleSetupCanary(ctx, interaction);
+        await handleSetupCanary(ctx, interaction);
+        break;
       case "antiraid":
-        return handleSetupAntiRaid(ctx, interaction);
+        await handleSetupAntiRaid(ctx, interaction);
+        break;
       case "show":
-        return handleShowConfig(ctx, interaction);
+        await handleShowConfig(ctx, interaction);
+        break;
     }
   },
 };
 
 async function handleSetupQuarantine(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const role = interaction.options.getRole("role", true);
 
   await ctx.prisma.guildConfig.upsert({
@@ -61,10 +68,12 @@ async function handleSetupQuarantine(ctx: BotContext, interaction: ChatInputComm
     update: { quarantineRoleId: role.id },
   });
 
-  await interaction.reply(`✅ Rôle de quarantaine défini: **${role.name}**`);
+  await interaction.reply(translations.setup_quarantine_success(role.name));
 }
 
 async function handleSetupCanary(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   await interaction.deferReply({ ephemeral: true });
   const guild = interaction.guild!;
 
@@ -86,13 +95,12 @@ async function handleSetupCanary(ctx: BotContext, interaction: ChatInputCommandI
     },
   });
 
-  await interaction.editReply(
-    `✅ Salon piège créé: ${channel}\n` +
-      `Il ressemble à un salon normal — tout message dedans = kick automatique.`
-  );
+  await interaction.editReply(translations.setup_canary_success(channel));
 }
 
 async function handleSetupAntiRaid(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const threshold = interaction.options.getInteger("threshold");
   const window = interaction.options.getInteger("window");
 
@@ -101,7 +109,7 @@ async function handleSetupAntiRaid(ctx: BotContext, interaction: ChatInputComman
   if (window) updateData.raidJoinWindow = window;
 
   if (Object.keys(updateData).length === 0) {
-    return interaction.reply({ content: "❌ Spécifie au moins un paramètre.", ephemeral: true });
+    return interaction.reply({ content: translations.specify_one_param, ephemeral: true });
   }
 
   await ctx.prisma.guildConfig.upsert({
@@ -110,30 +118,21 @@ async function handleSetupAntiRaid(ctx: BotContext, interaction: ChatInputComman
     update: updateData,
   });
 
-  await interaction.reply(
-    `✅ Anti-raid configuré:\n` +
-      (threshold ? `• Seuil: **${threshold} joins**\n` : "") +
-      (window ? `• Fenêtre: **${window}s**\n` : "")
-  );
+  await interaction.reply(translations.setup_antiraid_success(threshold ?? undefined, window ?? undefined));
 }
 
 async function handleShowConfig(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const config = await ctx.prisma.guildConfig.findUnique({
     where: { guildId: interaction.guildId! },
   });
 
   if (!config) {
-    return interaction.reply({ content: "❌ Aucune configuration trouvée.", ephemeral: true });
+    return interaction.reply({ content: translations.config_not_found, ephemeral: true });
   }
 
-  const lines = [
-    `**Anti-Raid:** seuil=${config.raidJoinThreshold} joins / ${config.raidJoinWindow}s, auto-lockdown=${config.raidAutoLockdown ? "✅" : "❌"}`,
-    `**Anti-Spam:** max=${config.spamMaxMessages} msgs/${config.spamWindow}s, mentions max=${config.spamMaxMentions}/${config.spamMentionWindow}s`,
-    `**Anti-Phishing:** ${config.phishingEnabled ? "✅" : "❌"}, redirects=${config.phishingCheckRedirects ? "✅" : "❌"}`,
-    `**Secret Scan:** ${config.secretScanEnabled ? "✅" : "❌"}`,
-    `**Quarantaine:** ${config.quarantineEnabled ? "✅" : "❌"}, rôle=${config.quarantineRoleId || "non défini"}`,
-    `**Emergency:** ${config.emergencyEnabled ? "✅" : "❌"}`,
-  ];
+  const lines = translations.config_lines(config);
 
-  await interaction.reply({ content: `⚙️ **Configuration**\n\n${lines.join("\n")}`, ephemeral: true });
+  await interaction.reply({ content: `⚙️ **${translations.config_title}**\n\n${lines.join("\n")}`, ephemeral: true });
 }

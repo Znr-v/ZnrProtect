@@ -7,6 +7,7 @@ import {
 import { BotCommand } from "./index";
 import { BotContext } from "../index";
 import { activateLockdown, deactivateLockdown } from "../modules/antiRaid";
+import { t } from "../lib/i18n";
 
 export const securityCommand: BotCommand = {
   data: new SlashCommandBuilder()
@@ -53,26 +54,36 @@ export const securityCommand: BotCommand = {
 
     switch (sub) {
       case "status":
-        return handleStatus(ctx, interaction);
+        await handleStatus(ctx, interaction);
+        break;
       case "lockdown":
-        return handleLockdown(ctx, interaction);
+        await handleLockdown(ctx, interaction);
+        break;
       case "unlock":
-        return handleUnlock(ctx, interaction);
+        await handleUnlock(ctx, interaction);
+        break;
       case "incidents":
-        return handleIncidents(ctx, interaction);
+        await handleIncidents(ctx, interaction);
+        break;
       case "user":
-        return handleUser(ctx, interaction);
+        await handleUser(ctx, interaction);
+        break;
       case "quarantine":
-        return handleQuarantine(ctx, interaction);
+        await handleQuarantine(ctx, interaction);
+        break;
       case "trust":
-        return handleTrust(ctx, interaction);
+        await handleTrust(ctx, interaction);
+        break;
       case "emergency":
-        return handleEmergency(ctx, interaction);
+        await handleEmergency(ctx, interaction);
+        break;
     }
   },
 };
 
 async function handleStatus(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const guildId = interaction.guildId!;
 
   const [guild, recentEvents, openIncidents, highRiskMembers] = await Promise.all([
@@ -85,14 +96,16 @@ async function handleStatus(ctx: BotContext, interaction: ChatInputCommandIntera
   ]);
 
   const embed = new EmbedBuilder()
-    .setTitle("🛡️ Statut de sécurité")
+    .setTitle(translations.status_title)
     .setColor(guild?.lockdownActive ? 0xff0000 : 0x00ff00)
     .addFields(
-      { name: "Lockdown", value: guild?.lockdownActive ? "🔴 ACTIF" : "🟢 Inactif", inline: true },
-      { name: "Events (24h)", value: `${recentEvents}`, inline: true },
-      { name: "Incidents ouverts", value: `${openIncidents}`, inline: true },
-      { name: "Membres à risque", value: `${highRiskMembers}`, inline: true },
-      { name: "Score serveur", value: `${guild?.riskScore || 0}/100`, inline: true },
+      translations.status_fields(
+        !!guild?.lockdownActive,
+        recentEvents,
+        openIncidents,
+        highRiskMembers,
+        guild?.riskScore || 0
+      )
     )
     .setTimestamp();
 
@@ -100,24 +113,32 @@ async function handleStatus(ctx: BotContext, interaction: ChatInputCommandIntera
 }
 
 async function handleLockdown(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
+  
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: "❌ Permission Administrateur requise.", ephemeral: true });
+    return interaction.reply({ content: translations.admin_required, ephemeral: true });
   }
   await interaction.deferReply();
   await activateLockdown(ctx, interaction.guild!);
-  await interaction.editReply("🔒 **Lockdown activé** — tous les salons sont verrouillés.");
+  await interaction.editReply(translations.lockdown_active_reply);
 }
 
 async function handleUnlock(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
+
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: "❌ Permission Administrateur requise.", ephemeral: true });
+    return interaction.reply({ content: translations.admin_required, ephemeral: true });
   }
   await interaction.deferReply();
   await deactivateLockdown(ctx, interaction.guild!);
-  await interaction.editReply("🔓 **Lockdown désactivé** — salons déverrouillés.");
+  await interaction.editReply(translations.lockdown_deactive_reply);
 }
 
 async function handleIncidents(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const incidents = await ctx.prisma.incident.findMany({
     where: { guildId: interaction.guildId! },
     orderBy: { createdAt: "desc" },
@@ -125,7 +146,7 @@ async function handleIncidents(ctx: BotContext, interaction: ChatInputCommandInt
   });
 
   if (incidents.length === 0) {
-    return interaction.reply({ content: "✅ Aucun incident récent.", ephemeral: true });
+    return interaction.reply({ content: translations.incidents_empty, ephemeral: true });
   }
 
   const severityEmoji: Record<string, string> = {
@@ -144,15 +165,11 @@ async function handleIncidents(ctx: BotContext, interaction: ChatInputCommandInt
   };
 
   const embed = new EmbedBuilder()
-    .setTitle("📋 Incidents récents")
+    .setTitle(translations.incidents_title)
     .setColor(0x5865f2)
     .setDescription(
       incidents
-        .map(
-          (i) =>
-            `${severityEmoji[i.severity]} ${statusEmoji[i.status]} **${i.title}**\n` +
-            `ID: \`${i.id.slice(0, 8)}\` — ${i.createdAt.toLocaleDateString("fr-FR")}`
-        )
+        .map((i) => translations.incidents_map(i, severityEmoji[i.severity] || "❓", statusEmoji[i.status] || "❓"))
         .join("\n\n")
     )
     .setTimestamp();
@@ -161,6 +178,8 @@ async function handleIncidents(ctx: BotContext, interaction: ChatInputCommandInt
 }
 
 async function handleUser(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const user = interaction.options.getUser("membre", true);
   const guildId = interaction.guildId!;
 
@@ -169,12 +188,17 @@ async function handleUser(ctx: BotContext, interaction: ChatInputCommandInteract
   });
 
   if (!member) {
-    return interaction.reply({ content: "❌ Membre non trouvé en base.", ephemeral: true });
+    return interaction.reply({ content: translations.member_not_found, ephemeral: true });
   }
 
   const riskColor = member.riskScore >= 81 ? 0xff0000 : member.riskScore >= 61 ? 0xff8c00 : member.riskScore >= 31 ? 0xffff00 : 0x00ff00;
-  const riskLabel =
-    member.riskScore >= 81 ? "CRITIQUE" : member.riskScore >= 61 ? "ÉLEVÉ" : member.riskScore >= 31 ? "MODÉRÉ" : "NORMAL";
+  
+  let riskLabel = "";
+  if (lang === "fr") {
+    riskLabel = member.riskScore >= 81 ? "CRITIQUE" : member.riskScore >= 61 ? "ÉLEVÉ" : member.riskScore >= 31 ? "MODÉRÉ" : "NORMAL";
+  } else {
+    riskLabel = member.riskScore >= 81 ? "CRITICAL" : member.riskScore >= 61 ? "HIGH" : member.riskScore >= 31 ? "MODERATE" : "NORMAL";
+  }
 
   const recentEvents = await ctx.prisma.securityEvent.count({
     where: { guildId, actorId: user.id, createdAt: { gte: new Date(Date.now() - 7 * 86400000) } },
@@ -185,13 +209,16 @@ async function handleUser(ctx: BotContext, interaction: ChatInputCommandInteract
     .setThumbnail(user.displayAvatarURL())
     .setColor(riskColor)
     .addFields(
-      { name: "Score de risque", value: `**${member.riskScore}/100** (${riskLabel})`, inline: true },
-      { name: "Messages", value: `${member.messageCount}`, inline: true },
-      { name: "Liens", value: `${member.linkCount}`, inline: true },
-      { name: "Avertissements", value: `${member.warnCount}`, inline: true },
-      { name: "Quarantaine", value: member.quarantined ? "🔴 Oui" : "🟢 Non", inline: true },
-      { name: "Fiable", value: member.trusted ? "✅ Oui" : "❌ Non", inline: true },
-      { name: "Events (7j)", value: `${recentEvents}`, inline: true },
+      translations.user_fields(
+        member.riskScore,
+        riskLabel,
+        member.messageCount,
+        member.linkCount,
+        member.warnCount,
+        member.quarantined,
+        member.trusted,
+        recentEvents
+      )
     )
     .setTimestamp();
 
@@ -199,23 +226,25 @@ async function handleUser(ctx: BotContext, interaction: ChatInputCommandInteract
 }
 
 async function handleQuarantine(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const user = interaction.options.getUser("membre", true);
-  const reason = interaction.options.getString("raison") || "Quarantaine manuelle";
+  const reason = interaction.options.getString("raison") || (lang === "fr" ? "Quarantaine manuelle" : "Manual quarantine");
   const guildId = interaction.guildId!;
 
   const config = await ctx.prisma.guildConfig.findUnique({ where: { guildId } });
   if (!config?.quarantineRoleId) {
     return interaction.reply({
-      content: "❌ Aucun rôle de quarantaine configuré. Utilise `/setup quarantine`.",
+      content: translations.no_quarantine_role,
       ephemeral: true,
     });
   }
 
   const member = interaction.guild!.members.cache.get(user.id);
-  if (!member) return interaction.reply({ content: "❌ Membre introuvable.", ephemeral: true });
+  if (!member) return interaction.reply({ content: translations.member_not_found_guild, ephemeral: true });
 
   const role = interaction.guild!.roles.cache.get(config.quarantineRoleId);
-  if (!role) return interaction.reply({ content: "❌ Rôle de quarantaine introuvable.", ephemeral: true });
+  if (!role) return interaction.reply({ content: translations.role_not_found, ephemeral: true });
 
   await member.roles.add(role, reason);
   await ctx.prisma.member.updateMany({
@@ -223,10 +252,12 @@ async function handleQuarantine(ctx: BotContext, interaction: ChatInputCommandIn
     data: { quarantined: true },
   });
 
-  await interaction.reply(`🔒 **${user.tag}** mis en quarantaine. Raison: ${reason}`);
+  await interaction.reply(translations.quarantine_success(user.tag, reason));
 }
 
 async function handleTrust(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
   const user = interaction.options.getUser("membre", true);
   const guildId = interaction.guildId!;
 
@@ -241,16 +272,19 @@ async function handleTrust(ctx: BotContext, interaction: ChatInputCommandInterac
     const member = interaction.guild!.members.cache.get(user.id);
     const role = interaction.guild!.roles.cache.get(config.quarantineRoleId);
     if (member && role && member.roles.cache.has(role.id)) {
-      await member.roles.remove(role, "Marqué comme fiable");
+      await member.roles.remove(role, lang === "fr" ? "Marqué comme fiable" : "Marked as trusted");
     }
   }
 
-  await interaction.reply(`✅ **${user.tag}** marqué comme fiable.`);
+  await interaction.reply(translations.trust_success(user.tag));
 }
 
 async function handleEmergency(ctx: BotContext, interaction: ChatInputCommandInteraction) {
+  const lang = ((interaction as any).language || "fr") as "en" | "fr";
+  const translations = t[lang];
+
   if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-    return interaction.reply({ content: "❌ Permission Administrateur requise.", ephemeral: true });
+    return interaction.reply({ content: translations.admin_required, ephemeral: true });
   }
   await interaction.deferReply();
 
@@ -274,24 +308,18 @@ async function handleEmergency(ctx: BotContext, interaction: ChatInputCommandInt
       type: "EMERGENCY_ACTIVATED",
       severity: "CRITICAL",
       actorId: interaction.user.id,
-      description: `Bouton d'urgence activé par ${interaction.user.tag}`,
+      description: translations.emergency_event_desc(interaction.user.tag),
     },
   });
 
   await ctx.prisma.incident.create({
     data: {
       guildId: guild.id,
-      title: "🚨 URGENCE — Bouton d'urgence activé",
+      title: translations.emergency_incident_title,
       severity: "CRITICAL",
-      description: `Activé par ${interaction.user.tag}`,
+      description: translations.emergency_incident_desc(interaction.user.tag),
     },
   });
 
-  await interaction.editReply(
-    "🚨 **MODE URGENCE ACTIVÉ**\n" +
-      "• Lockdown activé sur tous les salons\n" +
-      "• Toutes les invitations supprimées\n" +
-      "• Incident créé\n\n" +
-      "Utilise `/security unlock` quand la situation est résolue."
-  );
+  await interaction.editReply(translations.emergency_reply);
 }

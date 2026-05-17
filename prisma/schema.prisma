@@ -393,6 +393,7 @@ model DashboardUser {
   username    String
   avatar      String?
   role        DashboardRole @default(VIEWER)
+  language    String        @default("fr")
   approved    Boolean      @default(false)
   approvedBy  String?
   createdAt   DateTime     @default(now())

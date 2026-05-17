@@ -8,6 +8,7 @@ import { apiFetch, setAuthToken } from "@/lib/api";
 import { useDashboardUser } from "@/lib/usePermissions";
 import { MentionSearch } from "@/components/MentionSearch";
 import { StatCard } from "@/components/StatCard";
+import { useI18n } from "@/lib/i18n";
 
 import { SeverityBadge } from "@/components/SeverityBadge";
 type GuildData = {
@@ -643,15 +644,16 @@ export default function GuildPage() {
   const { data: session } = useSession();
   const { getGuildRole, loaded: roleLoaded } = useDashboardUser();
   const role = getGuildRole(guildId) || "VIEWER";
+  const { t } = useI18n();
   
   const allTabs: { key: Tab; label: string; icon: React.ReactNode; roles: string[]; href?: string }[] = [
-    { key: "overview", label: "Vue d'ensemble", icon: <Shield className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
-    { key: "incidents", label: "Incidents", icon: <AlertTriangle className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
-    { key: "events", label: "Events", icon: <Activity className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
-    { key: "members", label: "Membres", icon: <Users className="w-4 h-4" />, roles: ["OWNER", "ADMIN", "MODERATOR"] },
-    { key: "logs", label: "Logs", icon: <ScrollText className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
-    { key: "config", label: "Config", icon: <Settings className="w-4 h-4" />, roles: ["OWNER"] },
-    { key: "roles", label: "Rôles", icon: <Shield className="w-4 h-4" />, roles: ["OWNER", "ADMIN"], href: `/guild/${guildId}/configs` },
+    { key: "overview", label: t("tabOverview"), icon: <Shield className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "incidents", label: t("tabIncidents"), icon: <AlertTriangle className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "events", label: t("tabEvents"), icon: <Activity className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "members", label: t("tabMembers"), icon: <Users className="w-4 h-4" />, roles: ["OWNER", "ADMIN", "MODERATOR"] },
+    { key: "logs", label: t("tabLogs"), icon: <ScrollText className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
+    { key: "config", label: t("tabConfig"), icon: <Settings className="w-4 h-4" />, roles: ["OWNER"] },
+    { key: "roles", label: t("tabRoles"), icon: <Shield className="w-4 h-4" />, roles: ["OWNER", "ADMIN"], href: `/guild/${guildId}/configs` },
   ];
   const tabs = allTabs.filter(t => t.roles.includes(role));
 
