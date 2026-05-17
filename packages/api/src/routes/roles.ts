@@ -42,6 +42,7 @@ export async function roleRoutes(app: FastifyInstance) {
       discordRoleId?: string;
       discordPermissions?: string[];
       panelPermissions?: string[];
+      hoist?: boolean;
     };
     const prisma = (request as any).prisma;
     const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
@@ -83,14 +84,56 @@ export async function roleRoutes(app: FastifyInstance) {
       orderBy: { position: "desc" },
     });
 
+    let discordRoleId = body.discordRoleId || null;
+    let roleColor = body.color || "#99AAb5";
+
+    console.log("[DEBUG] Role creation - body:", JSON.stringify(body));
+    console.log("[DEBUG] Role creation - discordRoleId:", discordRoleId);
+
+    const shouldCreateOnDiscord = !discordRoleId || discordRoleId.startsWith("manual-");
+
+    if (shouldCreateOnDiscord) {
+      const client = (request as any).client;
+      console.log("[DEBUG] Client ready:", client.isReady());
+
+      if (!client.isReady()) {
+        console.log("[DEBUG] Client not ready, waiting...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      console.log("[DEBUG] Creating role on Discord...");
+
+      try {
+        const discordGuild = await client.guilds.fetch(guildId);
+        if (!discordGuild) {
+          console.log("[DEBUG] Discord guild not found");
+          return reply.status(404).send({ error: "Serveur Discord introuvable" });
+        }
+
+        console.log("[DEBUG] Discord guild found, creating role:", body.name, "color:", roleColor.replace("#", ""));
+
+        const createdRole = await discordGuild.roles.create({
+          name: body.name,
+          color: parseInt(roleColor.replace("#", ""), 16),
+        });
+
+        console.log("[DEBUG] Role created on Discord, ID:", createdRole.id);
+        discordRoleId = createdRole.id;
+      } catch (err) {
+        console.error("[DEBUG] Error creating role on Discord:", err);
+        return reply.status(500).send({ error: "Erreur lors de la création du rôle sur Discord: " + err });
+      }
+    }
+
     const role = await prisma.guildRole.create({
       data: {
         guildId,
         name: body.name,
-        color: body.color || "#99AAb5",
-        discordRoleId: body.discordRoleId || null,
+        color: roleColor,
+        discordRoleId,
         discordPermissions: body.discordPermissions || [],
         panelPermissions: body.panelPermissions || [],
+        hoist: body.hoist || false,
         position: (maxPositionRole?.position || 0) + 1,
       },
     });
@@ -113,6 +156,7 @@ export async function roleRoutes(app: FastifyInstance) {
       discordPermissions?: string[];
       panelPermissions?: string[];
       position?: number;
+      hoist?: boolean;
     };
     const prisma = (request as any).prisma;
     const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
@@ -140,6 +184,47 @@ export async function roleRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "Les rôles Discord ne peuvent pas avoir de permissions panel" });
     }
 
+    if (existingRole.discordRoleId && !existingRole.discordRoleId.startsWith("manual-")) {
+      const client = (request as any).client;
+      const discordGuild = await client.guilds.fetch(existingRole.guildId);
+      if (discordGuild) {
+        const discordRole = await discordGuild.roles.cache.get(existingRole.discordRoleId);
+        if (discordRole) {
+          const updateData: { name?: string; color?: string; hoist?: boolean; permissions?: string } = {};
+          
+          if (body.name) updateData.name = body.name;
+          if (body.color) updateData.color = body.color.replace("#", "");
+          if (typeof body.hoist === "boolean") updateData.hoist = body.hoist;
+          
+          if (body.discordPermissions) {
+            const { PermissionsBitField } = await import("discord.js");
+            let permissionsValue = 0n;
+            const permMap: Record<string, bigint> = {
+              KICK: PermissionsBitField.Flags.KickMembers,
+              BAN: PermissionsBitField.Flags.BanMembers,
+              MUTE: PermissionsBitField.Flags.MuteMembers,
+              MANAGE_CHANNELS: PermissionsBitField.Flags.ManageChannels,
+              MANAGE_ROLES: PermissionsBitField.Flags.ManageRoles,
+              MANAGE_MESSAGES: PermissionsBitField.Flags.ManageMessages,
+              VIEW_AUDIT_LOG: PermissionsBitField.Flags.ViewAuditLog,
+              MANAGE_MEMBERS: PermissionsBitField.Flags.ManageMembers,
+            };
+            for (const perm of body.discordPermissions) {
+              if (permMap[perm]) {
+                permissionsValue |= permMap[perm];
+              }
+            }
+            updateData.permissions = permissionsValue.toString();
+          }
+          
+          if (Object.keys(updateData).length > 0) {
+            console.log("[DEBUG] Updating Discord role:", updateData);
+            await discordRole.edit(updateData);
+          }
+        }
+      }
+    }
+
     const role = await prisma.guildRole.update({
       where: { id: roleId },
       data: {
@@ -152,6 +237,7 @@ export async function roleRoutes(app: FastifyInstance) {
           panelPermissions: body.panelPermissions,
         }),
         ...(typeof body.position === "number" && { position: body.position }),
+        ...(typeof body.hoist === "boolean" && { hoist: body.hoist }),
       },
     });
 

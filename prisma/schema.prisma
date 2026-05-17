@@ -33,6 +33,7 @@ model Guild {
   webhookEntries    WebhookEntry[]
   inviteStats       InviteStats[]
   botActionLogs     BotActionLog[]
+  guildRoles        GuildRole[]
 }
 
 model GuildConfig {
@@ -420,4 +421,22 @@ model DashboardAuditLog {
   targetId  String?
   metadata  Json?
   createdAt DateTime @default(now())
+}
+
+model GuildRole {
+  id            String   @id @default(cuid())
+  guildId       String
+  guild         Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  discordRoleId String?
+  name          String
+  color         String   @default("#99AAb5")
+  position      Int      @default(0)
+  discordPermissions String[] @default([])
+  panelPermissions   String[] @default([])
+  hoist          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([guildId, discordRoleId])
+  @@unique([guildId, name])
 }

@@ -29,6 +29,7 @@ type GuildRole = {
   position: number;
   discordPermissions: string[];
   panelPermissions: string[];
+  hoist?: boolean;
 };
 
 const ALL_DISCORD_PERMISSIONS = [
@@ -189,6 +190,7 @@ export default function ConfigsPage() {
           discordPermissions: role.discordPermissions,
           panelPermissions: role.panelPermissions,
           position: role.position,
+          hoist: (role as any).hoist || false,
         },
       });
       setEditingRole(null);
@@ -212,8 +214,8 @@ export default function ConfigsPage() {
   };
 
   const handleMoveRole = async (roleId: string, direction: "up" | "down") => {
-    const panelRoles = roles.filter((r) => !r.discordRoleId);
-    const discordRoles = roles.filter((r) => r.discordRoleId);
+    const panelRoles = roles.filter((r) => !r.discordRoleId || (r.discordRoleId && r.discordRoleId.startsWith("manual-")));
+    const discordRoles = roles.filter((r) => r.discordRoleId && !r.discordRoleId.startsWith("manual-"));
     const currentList = activeTab === "panel" ? panelRoles : discordRoles;
 
     const currentIndex = currentList.findIndex((r) => r.id === roleId);
@@ -286,10 +288,10 @@ export default function ConfigsPage() {
   const canManageRoles = userRole === "OWNER" || userRole === "ADMIN";
 
   const panelRoles = roles
-    .filter((r) => !r.discordRoleId)
+    .filter((r) => !r.discordRoleId || (r.discordRoleId && r.discordRoleId.startsWith("manual-")))
     .sort((a, b) => b.position - a.position);
   const discordRoles = roles
-    .filter((r) => r.discordRoleId)
+    .filter((r) => r.discordRoleId && !r.discordRoleId.startsWith("manual-"))
     .sort((a, b) => b.position - a.position);
 
   // Default panel roles to create if none exist
@@ -493,24 +495,6 @@ export default function ConfigsPage() {
                 </div>
               </div>
               <div>
-                <label className="text-theme-secondary text-xs block mb-1">Permissions Panel:</label>
-                <div className="flex flex-wrap gap-1">
-                  {ALL_PANEL_PERMISSIONS.map((perm) => (
-                    <button
-                      key={perm}
-                      onClick={() => togglePermission({} as GuildRole, perm, "panel", "newDiscord")}
-                      className={`px-2 py-1 rounded text-xs font-medium border transition ${
-                        newDiscordPanelPermissions.includes(perm)
-                          ? "bg-discord/20 text-discord border-discord/30"
-                          : "bg-theme-tertiary text-theme-muted border-theme-border hover:text-theme-secondary"
-                      }`}
-                    >
-                      {perm.replace(/_/g, " ")}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
                 <label className="text-theme-secondary text-xs block mb-1">Permissions Discord:</label>
                 <div className="flex flex-wrap gap-1">
                   {ALL_DISCORD_PERMISSIONS.map((perm) => (
@@ -675,8 +659,8 @@ export default function ConfigsPage() {
                           })
                         }
                         className="w-8 h-8 rounded cursor-pointer"
-                        disabled={!!role.discordRoleId}
-                        title={role.discordRoleId ? "Couleur géré par Discord" : "Changer la couleur"}
+                        disabled={false}
+                        title="Changer la couleur"
                       />
                       <input
                         type="text"
@@ -688,7 +672,7 @@ export default function ConfigsPage() {
                           })
                         }
                         className="flex-1 bg-theme-primary border border-theme-border rounded px-2 py-1 text-sm text-white"
-                        disabled={!!role.discordRoleId}
+                        disabled={false}
                       />
                       {canManageRoles && (
                         <div className="flex gap-1">
@@ -709,7 +693,7 @@ export default function ConfigsPage() {
                       )}
                     </div>
 
-                    {!role.discordRoleId && (
+                    {(!role.discordRoleId || (role.discordRoleId && role.discordRoleId.startsWith("manual-"))) && (
                       <div className="mb-3">
                         <span className="text-theme-secondary text-xs block mb-1">
                           Permissions Panel:
@@ -732,7 +716,7 @@ export default function ConfigsPage() {
                       </div>
                     )}
 
-                    {role.discordRoleId && (
+                    {(role.discordRoleId && !role.discordRoleId.startsWith("manual-")) && (
                       <div>
                         <span className="text-theme-secondary text-xs block mb-1">
                           Permissions Discord:
@@ -741,7 +725,7 @@ export default function ConfigsPage() {
                           {ALL_DISCORD_PERMISSIONS.map((perm) => (
                             <button
                               key={perm}
-                              onClick={() => togglePermission(role, perm, "discord")}
+                              onClick={() => togglePermission(role, perm, "discord", "discord")}
                               className={`px-2 py-1 rounded text-xs font-medium border transition ${
                                 editingRole.discordPermissions.includes(perm)
                                   ? "bg-yellow-600/20 text-yellow-400 border-yellow-600/30"
@@ -754,11 +738,60 @@ export default function ConfigsPage() {
                         </div>
                       </div>
                     )}
+
+                    {(!role.discordRoleId || (role.discordRoleId && role.discordRoleId.startsWith("manual-"))) && (
+                      <div className="mb-3">
+                        <span className="text-theme-secondary text-xs block mb-1">
+                          Permissions Panel:
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {ALL_PANEL_PERMISSIONS.map((perm) => (
+                            <button
+                              key={perm}
+                              onClick={() => togglePermission(role, perm, "panel")}
+                              className={`px-2 py-1 rounded text-xs font-medium border transition ${
+                                editingRole.panelPermissions.includes(perm)
+                                  ? "bg-discord/20 text-discord border-discord/30"
+                                  : "bg-theme-tertiary text-theme-muted border-theme-border hover:text-theme-secondary"
+                              }`}
+                            >
+                              {perm.replace(/_/g, " ")}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {role.discordRoleId && !role.discordRoleId.startsWith("manual-") && (
+                      <div className="mb-3 flex items-center gap-3 p-2 bg-theme-tertiary rounded-lg border border-theme-border">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingRole({
+                              ...editingRole,
+                              hoist: !editingRole.hoist,
+                            })
+                          }
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            editingRole.hoist ? "bg-green-600" : "bg-theme-border"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              editingRole.hoist ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                        <label className="text-theme-secondary text-sm cursor-pointer">
+                          Afficher séparément dans la liste des membres
+                        </label>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="p-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      {canManageRoles && !role.discordRoleId && (
+                      {canManageRoles && (
                         <div className="flex flex-col gap-0">
                           <button
                             onClick={() => handleMoveRole(role.id, "up")}
@@ -822,7 +855,7 @@ export default function ConfigsPage() {
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          {(!role.discordRoleId || (role.discordRoleId && role.discordRoleId.startsWith("manual-"))) && isOwner && (
+                          {isOwner && (
                             <button
                               onClick={() => setConfirmDelete(role)}
                               className="p-1.5 text-theme-secondary hover:text-red-400"
