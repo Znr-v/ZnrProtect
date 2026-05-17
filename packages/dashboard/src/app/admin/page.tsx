@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, Shield, Trash2, Edit, X, Settings, Search, UserPlus, Check } from "lucide-react";
+import { ArrowLeft, Users, Shield, Trash2, Edit, X, Settings, Search, UserPlus, Check, Hash, RefreshCw } from "lucide-react";
 import { MentionSearch } from "@/components/MentionSearch";
 import { apiFetch, setAuthToken } from "@/lib/api";
 import { useDashboardUser, DashboardRole } from "@/lib/usePermissions";
@@ -52,6 +52,11 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<User | null>(null);
 
+  // Guild roles for role assignment
+  const [guildRoles, setGuildRoles] = useState<{ id: string; name: string; color: string; guildId: string }[]>([]);
+  const [selectedGuildForRoles, setSelectedGuildForRoles] = useState<string>("");
+  const [loadingRoles, setLoadingRoles] = useState(false);
+
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [tableRoleFilter, setTableRoleFilter] = useState<"ALL" | DashboardRole>("ALL");
@@ -60,6 +65,15 @@ export default function AdminPage() {
   const [searchError, setSearchError] = useState("");
   const [addRole, setAddRole] = useState<DashboardRole>("VIEWER");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [adminView, setAdminView] = useState<"members" | "discord-roles">("members");
+
+  // Discord roles and members state
+  const [discordRoles, setDiscordRoles] = useState<any[]>([]);
+  const [discordMembers, setDiscordMembers] = useState<any[]>([]);
+  const [loadingDiscordRoles, setLoadingDiscordRoles] = useState(false);
+  const [editingDiscordRole, setEditingDiscordRole] = useState<any | null>(null);
+  const [selectedDiscordRoleFilter, setSelectedDiscordRoleFilter] = useState<string>("ALL");
+  const [editingMemberRoles, setEditingMemberRoles] = useState<any | null>(null);
 
   const filteredUsers = users.filter(u => {
     const searchVal = searchQuery.replace(/^@/, "").toLowerCase();
@@ -68,6 +82,11 @@ export default function AdminPage() {
       u.discordId.includes(searchVal);
     const matchesRole = tableRoleFilter === "ALL" || u.role === tableRoleFilter;
     return matchesSearch && matchesRole;
+  });
+
+  const filteredDiscordMembers = (Array.isArray(discordMembers) ? discordMembers : []).filter(m => {
+    if (selectedDiscordRoleFilter === "ALL") return true;
+    return (m.roleIds || []).includes(selectedDiscordRoleFilter);
   });
 
   useEffect(() => {
@@ -104,6 +123,29 @@ export default function AdminPage() {
     }
     setLoading(false);
   };
+
+  const loadDiscordRoles = async () => {
+    if (!selectedGuildForRoles) return;
+    setLoadingDiscordRoles(true);
+    try {
+      const [rolesData, membersResponse] = await Promise.all([
+        apiFetch<{ roles: any[] }>(`/api/roles/${selectedGuildForRoles}`),
+        apiFetch<{ members: any[] }>(`/api/members/${selectedGuildForRoles}`)
+      ]);
+      const discordRolesList = (rolesData.roles || []).filter((r: any) => r.discordRoleId);
+      setDiscordRoles(discordRolesList);
+      setDiscordMembers(membersResponse?.members || []);
+    } catch (e) {
+      console.error("Failed to load Discord data:", e);
+    }
+    setLoadingDiscordRoles(false);
+  };
+
+  useEffect(() => {
+    if (adminView === "discord-roles" && selectedGuildForRoles) {
+      loadDiscordRoles();
+    }
+  }, [adminView, selectedGuildForRoles]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -209,8 +251,117 @@ export default function AdminPage() {
     }
   };
 
-  const availableRolesForAdd: DashboardRole[] = ["ADMIN", "MODERATOR", "VIEWER"];
-  const availableRolesForEdit: DashboardRole[] = ["OWNER", "ADMIN", "MODERATOR", "VIEWER"];
+  const loadGuildRoles = async (guildId: string) => {
+    if (!guildId) return;
+    setLoadingRoles(true);
+    try {
+      const data = await apiFetch<{ roles: { id: string; name: string; color: string; guildId: string }[] }>(`/api/roles/${guildId}`);
+      const panelRoles = (data.roles || []).filter((r: any) => !r.discordRoleId);
+      setGuildRoles(panelRoles);
+    } catch (e) {
+      console.error("Failed to load roles:", e);
+    }
+    setLoadingRoles(false);
+  };
+
+  const handleUpdateDiscordRolePermissions = async (roleId: string, permissions: string[]) => {
+    setActionLoading(`role-${roleId}`);
+    try {
+      await apiFetch(`/api/roles/${roleId}`, {
+        method: "PATCH",
+        body: { discordPermissions: permissions },
+      });
+      loadDiscordRoles();
+      setEditingDiscordRole(null);
+    } catch (e: any) {
+      console.error("Failed to update role:", e);
+    }
+    setActionLoading(null);
+  };
+
+  const handleAddRoleToMember = async (memberDiscordId: string, roleId: string) => {
+    if (!selectedGuildForRoles) {
+      alert("Aucun serveur sélectionné");
+      return;
+    }
+    setActionLoading(`add-role-${memberDiscordId}-${roleId}`);
+    try {
+      const result = await apiFetch<{ success?: boolean; error?: string }>(`/api/guilds/${selectedGuildForRoles}/members/${memberDiscordId}/roles`, {
+        method: "POST",
+        body: { roleId, action: "add" },
+      });
+      if (result.error) {
+        alert(result.error);
+      } else {
+        if (editingMemberRoles) {
+          setEditingMemberRoles({
+            ...editingMemberRoles,
+            roleIds: [...(editingMemberRoles.roleIds || []), roleId]
+          });
+        }
+        loadDiscordRoles();
+      }
+    } catch (e: any) {
+      console.error("Failed to add role:", e);
+      alert(e.message || "Erreur lors de l'ajout du rôle");
+    }
+    setActionLoading(null);
+  };
+
+  const handleRemoveRoleFromMember = async (memberDiscordId: string, roleId: string) => {
+    if (!selectedGuildForRoles) {
+      alert("Aucun serveur sélectionné");
+      return;
+    }
+    setActionLoading(`remove-role-${memberDiscordId}-${roleId}`);
+    try {
+      const result = await apiFetch<{ success?: boolean; error?: string }>(`/api/guilds/${selectedGuildForRoles}/members/${memberDiscordId}/roles`, {
+        method: "POST",
+        body: { roleId, action: "remove" },
+      });
+      if (result.error) {
+        alert(result.error);
+      } else {
+        if (editingMemberRoles) {
+          setEditingMemberRoles({
+            ...editingMemberRoles,
+            roleIds: (editingMemberRoles.roleIds || []).filter((id: string) => id !== roleId)
+          });
+        }
+        loadDiscordRoles();
+      }
+    } catch (e: any) {
+      console.error("Failed to remove role:", e);
+      alert(e.message || "Erreur lors du retrait du rôle");
+    }
+    setActionLoading(null);
+  };
+
+  const ALL_DISCORD_PERMISSIONS = [
+    "MANAGE_CHANNELS",
+    "MANAGE_GUILD",
+    "MANAGE_ROLES",
+    "MANAGE_MEMBERS",
+    "KICK_MEMBERS",
+    "BAN_MEMBERS",
+    "MUTE_MEMBERS",
+    "MOVE_MEMBERS",
+    "VIEW_AUDIT_LOG",
+  ];
+
+  useEffect(() => {
+    if (guilds.length > 0 && !selectedGuildForRoles) {
+      setSelectedGuildForRoles(guilds[0].guildId);
+      loadGuildRoles(guilds[0].guildId);
+    }
+  }, [guilds]);
+
+  const availableRolesForAdd = guildRoles.length > 0 
+    ? guildRoles.map(r => r.name as DashboardRole)
+    : ["ADMIN", "MODERATOR", "VIEWER"] as DashboardRole[];
+  const availableRolesForEdit = guildRoles.length > 0
+    ? guildRoles.map(r => r.name as DashboardRole)
+    : ["OWNER", "ADMIN", "MODERATOR", "VIEWER"] as DashboardRole[];
 
   const ROLE_HIERARCHY: Record<string, number> = {
     VIEWER: 0,
@@ -250,10 +401,29 @@ export default function AdminPage() {
         <div>
           <h1 className="text-2xl font-bold">Administration</h1>
           <p className="text-theme-secondary text-sm">Gestion des utilisateurs et permissions</p>
+          {guilds.length > 0 && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-theme-secondary text-xs">Serveur:</span>
+              <select
+                value={selectedGuildForRoles}
+                onChange={(e) => {
+                  setSelectedGuildForRoles(e.target.value);
+                  loadGuildRoles(e.target.value);
+                }}
+                className="bg-theme-primary border border-theme-border rounded px-2 py-1 text-xs"
+              >
+                {guilds.map((g) => (
+                  <option key={g.guildId} value={g.guildId}>{g.guildName}</option>
+                ))}
+              </select>
+              {loadingRoles && <RefreshCw className="w-3 h-3 animate-spin text-theme-muted" />}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Search section */}
+      {/* Search section - only show for members view */}
+      {adminView === "members" && (
       <div className="bg-theme-secondary rounded-xl border border-theme-border p-4 mb-6">
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <Users className="w-5 h-5 text-discord" />
@@ -332,7 +502,36 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      )}
 
+      {/* View Toggle */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setAdminView("members")}
+          className={`px-4 py-2 rounded-lg font-medium transition ${
+            adminView === "members"
+              ? "bg-discord text-white"
+              : "bg-theme-tertiary text-theme-secondary hover:text-white"
+          }`}
+        >
+          <Users className="w-4 h-4 inline mr-2" />
+          Membres Panel
+        </button>
+        <button
+          onClick={() => setAdminView("discord-roles")}
+          className={`px-4 py-2 rounded-lg font-medium transition ${
+            adminView === "discord-roles"
+              ? "bg-yellow-600 text-white"
+              : "bg-theme-tertiary text-theme-secondary hover:text-white"
+          }`}
+        >
+          <Shield className="w-4 h-4 inline mr-2" />
+          Rôles Discord
+        </button>
+      </div>
+
+      {adminView === "members" && (
+      <>
       {/* Users list header & filters */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-4">
         <h2 className="text-xl font-bold flex items-center gap-2">
@@ -428,6 +627,101 @@ export default function AdminPage() {
           </table>
         )}
       </div>
+      </>)}
+
+      {adminView === "discord-roles" && (
+        <div>
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-4">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Users className="w-6 h-6 text-yellow-500" />
+              Membres du serveur Discord
+            </h2>
+            <select
+              value={selectedDiscordRoleFilter}
+              onChange={(e) => setSelectedDiscordRoleFilter(e.target.value)}
+              className="bg-theme-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500"
+            >
+              <option value="ALL">Tous les rôles</option>
+              {discordRoles.map((role) => (
+                <option key={role.id} value={role.discordRoleId}>
+                  {role.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="bg-theme-secondary rounded-xl border border-theme-border overflow-hidden">
+            {loadingDiscordRoles ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500" />
+              </div>
+            ) : discordMembers.length === 0 ? (
+              <div className="p-8 text-center text-theme-muted">
+                Aucun membre trouvé. Vérifiez que le serveur Discord est configuré.
+              </div>
+            ) : (
+              <table className="w-full text-left">
+                <thead className="bg-theme-tertiary text-theme-secondary text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Membre</th>
+                    <th className="py-3 px-4">Rôles Discord</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDiscordMembers.map((member) => (
+                    <tr key={member.discordId} className="border-b border-theme-border hover:bg-theme-tertiary/30 transition">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          {member.avatar ? (
+                            <img src={member.avatar} alt="" className="w-10 h-10 rounded-full" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-theme-tertiary flex items-center justify-center text-lg font-bold">
+                              {(member.username || "?").charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-medium">{member.nickname || member.username || "Membre"}</div>
+                            <div className="text-theme-muted text-xs font-mono">@{member.username}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1">
+                          {(member.roleIds || []).map((roleId: string) => {
+                            const role = discordRoles.find(r => r.discordRoleId === roleId);
+                            return role ? (
+                              <span
+                                key={roleId}
+                                className="px-2 py-0.5 text-xs rounded-full"
+                                style={{ backgroundColor: `${role.color}20`, color: role.color, border: `1px solid ${role.color}40` }}
+                              >
+                                {role.name}
+                              </span>
+                            ) : null;
+                          })}
+                          {(!member.roleIds || member.roleIds.length === 0) && (
+                            <span className="text-theme-muted text-xs">Aucun rôle</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => setEditingMemberRoles(member)}
+                          className="p-2 text-theme-secondary hover:text-white transition"
+                          title="Gérer les rôles"
+                        >
+                          <Settings className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pending Role Change (Owner Transfer) confirmation */}
       {pendingRoleChange && (
@@ -537,6 +831,61 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Member Roles Modal */}
+      {editingMemberRoles && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-theme-secondary rounded-xl p-6 w-full max-w-md border border-theme-border max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-yellow-500" />
+                  Gérer les rôles de {editingMemberRoles.nickname || editingMemberRoles.username}
+                </h3>
+                <p className="text-theme-secondary text-sm">Ajouter ou retirer des rôles Discord</p>
+              </div>
+              <button onClick={() => setEditingMemberRoles(null)} className="text-theme-secondary hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {discordRoles.map((role) => {
+                const hasRole = (editingMemberRoles.roleIds || []).includes(role.discordRoleId);
+                const isAdding = actionLoading === `add-role-${editingMemberRoles.discordId}-${role.discordRoleId}`;
+                const isRemoving = actionLoading === `remove-role-${editingMemberRoles.discordId}-${role.discordRoleId}`;
+                const isLoading = isAdding || isRemoving;
+
+                return (
+                  <div key={role.id} className="flex items-center justify-between bg-theme-tertiary/50 rounded-lg p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: role.color }} />
+                      <span className="font-medium">{role.name}</span>
+                    </div>
+                    <button
+                      onClick={() => hasRole 
+                        ? handleRemoveRoleFromMember(editingMemberRoles.discordId, role.discordRoleId)
+                        : handleAddRoleToMember(editingMemberRoles.discordId, role.discordRoleId)
+                      }
+                      disabled={isLoading}
+                      className={`px-3 py-1 rounded text-sm font-medium transition disabled:opacity-50 ${
+                        hasRole
+                          ? "bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/30"
+                          : "bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-600/30"
+                      }`}
+                    >
+                      {isLoading ? "..." : hasRole ? "Retirer" : "Ajouter"}
+                    </button>
+                  </div>
+                );
+              })}
+              {discordRoles.length === 0 && (
+                <p className="text-theme-muted text-center py-4">Aucun rôle Discord disponible</p>
+              )}
+            </div>
           </div>
         </div>
       )}
