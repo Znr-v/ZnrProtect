@@ -336,7 +336,7 @@ export default function ConfigsPage() {
       <div className="flex items-center gap-4 mb-8">
         <Link
           href={`/guild/${guildId}`}
-          className="text-theme-secondary hover:text-white transition"
+          className="text-theme-secondary hover:text-theme-primary transition"
         >
           <ArrowLeft className="w-6 h-6" />
         </Link>
@@ -357,7 +357,7 @@ export default function ConfigsPage() {
           className={`px-4 py-2 rounded-lg font-medium transition ${
             activeTab === "panel"
               ? "bg-discord text-white"
-              : "bg-theme-tertiary text-theme-secondary hover:text-white"
+              : "bg-theme-tertiary text-theme-secondary hover:text-theme-primary"
           }`}
         >
           <Shield className="w-4 h-4 inline mr-2" />
@@ -369,7 +369,7 @@ export default function ConfigsPage() {
             className={`px-4 py-2 rounded-lg font-medium transition ${
               activeTab === "discord"
                 ? "bg-discord text-white"
-                : "bg-theme-tertiary text-theme-secondary hover:text-white"
+                : "bg-theme-tertiary text-theme-secondary hover:text-theme-primary"
             }`}
           >
             <Hash className="w-4 h-4 inline mr-2" />
@@ -380,7 +380,7 @@ export default function ConfigsPage() {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="ml-auto px-4 py-2 rounded-lg font-medium bg-theme-tertiary text-theme-secondary hover:text-white transition flex items-center gap-2 disabled:opacity-50"
+            className="ml-auto px-4 py-2 rounded-lg font-medium bg-theme-tertiary text-theme-secondary hover:text-theme-primary transition flex items-center gap-2 disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
             Synchroniser
@@ -467,7 +467,7 @@ export default function ConfigsPage() {
                   setNewDiscordRolePermissions([]);
                   setNewDiscordPanelPermissions([]);
                 }}
-                className="text-theme-secondary hover:text-white"
+                className="text-theme-secondary hover:text-theme-primary"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -481,7 +481,7 @@ export default function ConfigsPage() {
                     value={newDiscordRoleName}
                     onChange={(e) => setNewDiscordRoleName(e.target.value)}
                     placeholder="Ex: Helper"
-                    className="w-full bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord"
+                    className="w-full bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-primary focus:outline-none focus:border-discord"
                   />
                 </div>
                 <div>
@@ -537,7 +537,7 @@ export default function ConfigsPage() {
                   setNewRoleColor("#99AAb5");
                   setNewRolePermissions([]);
                 }}
-                className="text-theme-secondary hover:text-white"
+                className="text-theme-secondary hover:text-theme-primary"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -553,7 +553,7 @@ export default function ConfigsPage() {
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                     placeholder="Ex: Modérateur"
-                    className="w-full bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord"
+                    className="w-full bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-primary focus:outline-none focus:border-discord"
                   />
                 </div>
                 <div>
@@ -671,7 +671,7 @@ export default function ConfigsPage() {
                             name: e.target.value,
                           })
                         }
-                        className="flex-1 bg-theme-primary border border-theme-border rounded px-2 py-1 text-sm text-white"
+                        className="flex-1 bg-theme-primary border border-theme-border rounded px-2 py-1 text-sm text-theme-primary"
                         disabled={false}
                       />
                       {canManageRoles && (
@@ -685,7 +685,7 @@ export default function ConfigsPage() {
                           </button>
                           <button
                             onClick={() => setEditingRole(null)}
-                            className="px-3 py-1 text-theme-secondary hover:text-white"
+                            className="px-3 py-1 text-theme-secondary hover:text-theme-primary"
                           >
                             Annuler
                           </button>
@@ -739,29 +739,6 @@ export default function ConfigsPage() {
                       </div>
                     )}
 
-                    {(!role.discordRoleId || (role.discordRoleId && role.discordRoleId.startsWith("manual-"))) && (
-                      <div className="mb-3">
-                        <span className="text-theme-secondary text-xs block mb-1">
-                          Permissions Panel:
-                        </span>
-                        <div className="flex flex-wrap gap-1">
-                          {ALL_PANEL_PERMISSIONS.map((perm) => (
-                            <button
-                              key={perm}
-                              onClick={() => togglePermission(role, perm, "panel")}
-                              className={`px-2 py-1 rounded text-xs font-medium border transition ${
-                                editingRole.panelPermissions.includes(perm)
-                                  ? "bg-discord/20 text-discord border-discord/30"
-                                  : "bg-theme-tertiary text-theme-muted border-theme-border hover:text-theme-secondary"
-                              }`}
-                            >
-                              {perm.replace(/_/g, " ")}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     {role.discordRoleId && !role.discordRoleId.startsWith("manual-") && (
                       <div className="mb-3 flex items-center gap-3 p-2 bg-theme-tertiary rounded-lg border border-theme-border">
                         <button
@@ -796,14 +773,14 @@ export default function ConfigsPage() {
                           <button
                             onClick={() => handleMoveRole(role.id, "up")}
                             disabled={index === 0 || actionLoading === `move-${role.id}`}
-                            className="p-0.5 text-theme-muted hover:text-white disabled:opacity-30"
+                            className="p-0.5 text-theme-muted hover:text-theme-primary disabled:opacity-30"
                           >
                             <ChevronUp className="w-3 h-3" />
                           </button>
                           <button
                             onClick={() => handleMoveRole(role.id, "down")}
                             disabled={index === currentRoles.length - 1 || actionLoading === `move-${role.id}`}
-                            className="p-0.5 text-theme-muted hover:text-white disabled:opacity-30"
+                            className="p-0.5 text-theme-muted hover:text-theme-primary disabled:opacity-30"
                           >
                             <ChevronDown className="w-3 h-3" />
                           </button>
@@ -850,7 +827,7 @@ export default function ConfigsPage() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setEditingRole({ ...role })}
-                            className="p-1.5 text-theme-secondary hover:text-white"
+                            className="p-1.5 text-theme-secondary hover:text-theme-primary"
                             title="Modifier"
                           >
                             <Edit className="w-4 h-4" />
@@ -888,7 +865,7 @@ export default function ConfigsPage() {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 text-theme-secondary hover:text-white transition"
+                className="px-4 py-2 text-theme-secondary hover:text-theme-primary transition"
               >
                 Annuler
               </button>

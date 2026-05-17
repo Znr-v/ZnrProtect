@@ -90,7 +90,7 @@ export async function roleRoutes(app: FastifyInstance) {
     console.log("[DEBUG] Role creation - body:", JSON.stringify(body));
     console.log("[DEBUG] Role creation - discordRoleId:", discordRoleId);
 
-    const shouldCreateOnDiscord = !discordRoleId || discordRoleId.startsWith("manual-");
+    const shouldCreateOnDiscord = !!(discordRoleId && discordRoleId.startsWith("manual-"));
 
     if (shouldCreateOnDiscord) {
       const client = (request as any).client;
@@ -207,7 +207,7 @@ export async function roleRoutes(app: FastifyInstance) {
               MANAGE_ROLES: PermissionsBitField.Flags.ManageRoles,
               MANAGE_MESSAGES: PermissionsBitField.Flags.ManageMessages,
               VIEW_AUDIT_LOG: PermissionsBitField.Flags.ViewAuditLog,
-              MANAGE_MEMBERS: PermissionsBitField.Flags.ManageMembers,
+              MANAGE_MEMBERS: PermissionsBitField.Flags.ModerateMembers,
             };
             for (const perm of body.discordPermissions) {
               if (permMap[perm]) {

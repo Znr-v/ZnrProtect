@@ -22,7 +22,7 @@ export function Navbar() {
           <div className="w-px h-6 bg-theme-tertiary" />
           {session ? (
             <>
-              <Link href="/" className="text-sm text-theme-secondary hover:text-white transition">
+              <Link href="/" className="text-sm text-theme-secondary hover:text-theme-primary transition">
                 Serveurs
               </Link>
               <div className="flex items-center gap-2">

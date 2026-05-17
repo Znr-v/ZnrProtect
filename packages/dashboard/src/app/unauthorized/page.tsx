@@ -8,11 +8,11 @@ export default function UnauthorizedPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
       <div className="w-20 h-20 bg-red-500/20 rounded-2xl flex items-center justify-center mb-6">
-        <XCircle className="w-10 h-10 text-red-400" />
+        <XCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
       </div>
       <h1 className="text-3xl font-extrabold mb-4">Accès refusé</h1>
         <p className="text-theme-secondary mb-8 max-w-md">
-        Vous êtes connecté en tant que <span className="text-white font-medium">{session?.user?.name || "utilisateur"}</span>, 
+        Vous êtes connecté en tant que <span className="text-theme-primary font-medium">{session?.user?.name || "utilisateur"}</span>, 
         mais vous n'avez pas les permissions nécessaires pour accéder à cette page.
       </p>
       <div className="bg-theme-secondary rounded-xl p-6 border border-theme-border max-w-md">

@@ -213,8 +213,8 @@ export default function Home() {
 function Feature({ icon, title, desc, color }: { icon: React.ReactNode; title: string; desc: string; color: "blue" | "yellow" | "red" }) {
   const colors = {
     blue:   { bg: "bg-discord/10",         icon: "text-discord"    },
-    yellow: { bg: "bg-yellow-500/10",       icon: "text-yellow-400" },
-    red:    { bg: "bg-red-500/10",          icon: "text-red-400"    },
+    yellow: { bg: "bg-yellow-500/10",       icon: "text-yellow-600 dark:text-yellow-400" },
+    red:    { bg: "bg-red-500/10",          icon: "text-red-600 dark:text-red-400"    },
   };
   const c = colors[color];
   return (

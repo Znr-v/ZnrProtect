@@ -8,11 +8,11 @@ export default function PendingPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
       <div className="w-20 h-20 bg-yellow-500/20 rounded-2xl flex items-center justify-center mb-6">
-        <Clock className="w-10 h-10 text-yellow-400" />
+        <Clock className="w-10 h-10 text-yellow-600 dark:text-yellow-400" />
       </div>
       <h1 className="text-3xl font-extrabold mb-4">En attente d'approbation</h1>
         <p className="text-theme-secondary mb-8 max-w-md">
-        Votre compte Discord (<span className="text-white font-medium">{session?.user?.name}</span>) 
+        Votre compte Discord (<span className="text-theme-primary font-medium">{session?.user?.name}</span>) 
         est connecté, mais vous n'avez pas encore accès au dashboard.
       </p>
       <div className="bg-theme-secondary rounded-xl p-6 border border-theme-border max-w-md mb-6">
@@ -28,7 +28,7 @@ export default function PendingPage() {
       </div>
       <button
         onClick={() => signOut({ callbackUrl: "/" })}
-        className="text-theme-secondary hover:text-white text-sm flex items-center gap-2 transition"
+        className="text-theme-secondary hover:text-theme-primary text-sm flex items-center gap-2 transition"
       >
         <LogOut className="w-4 h-4" />
         Se déconnecter

@@ -207,7 +207,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderMutes = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Historique des mutes</h4>
@@ -241,7 +241,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderKicks = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Historique des kicks</h4>
@@ -268,7 +268,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderBans = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Historique des bans</h4>
@@ -291,7 +291,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderWarns = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Avertissements & Sanctions</h4>
@@ -340,7 +340,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderRisk = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Détail du score de risque</h4>
@@ -410,7 +410,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderRoles = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Rôles du membre</h4>
@@ -463,7 +463,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
                 value={roleSearch}
                 onChange={(e) => setRoleSearch(e.target.value)}
                 placeholder="Rechercher ou sélectionner un rôle..."
-                className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 mb-2"
+                className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-theme-primary placeholder-theme-muted mb-2"
                 autoFocus
               />
               <div className="max-h-40 overflow-y-auto space-y-1">
@@ -505,7 +505,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
               </div>
               <button 
                 onClick={() => { setShowAddRole(false); setRoleSearch(""); }}
-                className="mt-2 text-xs text-gray-400 hover:text-white"
+                className="mt-2 text-xs text-theme-secondary hover:text-theme-primary"
               >
                 Annuler
               </button>
@@ -524,7 +524,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
             <div className="flex gap-2 justify-end">
               <button 
                 onClick={() => setConfirmRemove(null)}
-                className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition"
+                className="px-3 py-1.5 text-sm text-theme-secondary hover:text-theme-primary transition"
               >
                 Annuler
               </button>
@@ -546,7 +546,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderMessages = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Messages récents</h4>
@@ -582,7 +582,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
 
   const renderEvents = () => (
     <div className="space-y-3">
-      <button onClick={() => setDetailView("overview")} className="text-sm text-gray-400 hover:text-white flex items-center gap-1">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
         ← Retour
       </button>
       <h4 className="font-medium">Historique complet</h4>
@@ -620,7 +620,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
             <p className="text-xs text-gray-500">ID: {member.discordId}</p>
           </div>
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-white p-1">
+        <button onClick={onClose} className="text-theme-secondary hover:text-theme-primary p-1">
           <X className="w-5 h-5" />
         </button>
       </div>
@@ -969,25 +969,25 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
                 {actionIcons[selectedLog.action] || <Activity className="w-5 h-5" />}
                 {actionLabels[selectedLog.action] || selectedLog.action}
               </h3>
-              <button onClick={() => setSelectedLog(null)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setSelectedLog(null)} className="text-theme-secondary hover:text-theme-primary">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-3">
               <div>
                 <span className="text-gray-400 text-sm">Cible:</span>
-                <p className="text-white">{selectedLog.targetName || selectedLog.targetId || "Inconnu"}</p>
+                <p className="text-theme-primary">{selectedLog.targetName || selectedLog.targetId || "Inconnu"}</p>
               </div>
               {selectedLog.moderatorName && (
                 <div>
                   <span className="text-gray-400 text-sm">Modérateur:</span>
-                  <p className="text-white">{selectedLog.moderatorName}</p>
+                  <p className="text-theme-primary">{selectedLog.moderatorName}</p>
                 </div>
               )}
               {selectedLog.reason && (
                 <div>
                   <span className="text-gray-400 text-sm">Raison:</span>
-                  <p className="text-white">{selectedLog.reason}</p>
+                  <p className="text-theme-primary">{selectedLog.reason}</p>
                 </div>
               )}
               {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
@@ -1020,7 +1020,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
               )}
               <div>
                 <span className="text-gray-400 text-sm">Date:</span>
-                <p className="text-white">{new Date(selectedLog.createdAt).toLocaleString("fr-FR")}</p>
+                <p className="text-theme-primary">{new Date(selectedLog.createdAt).toLocaleString("fr-FR")}</p>
               </div>
             </div>
           </div>
@@ -1033,7 +1033,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
   return (
     <div>
       <div className="flex items-center gap-4 mb-8">
-        <Link href="/" className="text-gray-400 hover:text-white transition">
+        <Link href="/" className="text-theme-secondary hover:text-theme-primary transition">
           <ArrowLeft className="w-6 h-6" />
         </Link>
         <div className="w-14 h-14 rounded-2xl bg-dark-600 flex items-center justify-center text-xl font-bold">
@@ -1060,7 +1060,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
             <Link
               key={t.key}
               href={t.href}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition text-gray-400 hover:text-white"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition text-theme-secondary hover:text-theme-primary"
             >
               {t.icon} {t.label}
             </Link>
@@ -1069,7 +1069,7 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
               key={t.key}
               onClick={() => setTab(t.key as Tab)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                tab === t.key ? "bg-discord text-white" : "text-gray-400 hover:text-white"
+                tab === t.key ? "bg-discord text-white" : "text-theme-secondary hover:text-theme-primary"
               }`}
             >
               {t.icon} {t.label}
@@ -1214,7 +1214,7 @@ function EventModal({ event, onClose }: { event: Event; onClose: () => void }) {
             <h3 className="text-lg font-bold">{typeLabels[event.type] || event.type}</h3>
             <p className="text-gray-400 text-sm">{event.description}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-theme-secondary hover:text-theme-primary"><X className="w-5 h-5" /></button>
         </div>
         <div className="space-y-3">
           <div className="flex justify-between">
@@ -1295,7 +1295,7 @@ function IncidentModal({ incident, onClose }: { incident: Incident; onClose: () 
             <h3 className="text-lg font-bold">{incident.title}</h3>
             {incident.channelName && <p className="text-gray-400 text-sm">Salon: #{incident.channelName}</p>}
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-theme-secondary hover:text-theme-primary"><X className="w-5 h-5" /></button>
         </div>
         <div className="space-y-3">
           <div className="flex justify-between items-center">
@@ -1654,13 +1654,13 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
           </div>
           <button
           onClick={() => { setShowBannedOnly(!showBannedOnly); setShowBanHistory(false); }}
-          className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${showBannedOnly ? "bg-red-600 text-white" : "bg-dark-800 border border-dark-700 text-gray-400 hover:text-white"}`}
+          className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${showBannedOnly ? "bg-red-600 text-white" : "bg-dark-800 border border-dark-700 text-theme-secondary hover:text-theme-primary"}`}
         >
           {showBannedOnly ? "✓ Bannis" : "Bannis"}
         </button>
         <button
           onClick={() => { setShowBanHistory(!showBanHistory); setShowBannedOnly(false); }}
-          className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-1.5 ${showBanHistory ? "bg-purple-600 text-white" : "bg-dark-800 border border-dark-700 text-gray-400 hover:text-white"}`}
+          className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-1.5 ${showBanHistory ? "bg-purple-600 text-white" : "bg-dark-800 border border-dark-700 text-theme-secondary hover:text-theme-primary"}`}
         >
           <History className="w-4 h-4" />
           {showBanHistory ? "✓ Historique" : "Historique"}
@@ -1698,7 +1698,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                 onFocus={() => setShowRoleDropdown(true)}
                 onBlur={() => setTimeout(() => setShowRoleDropdown(false), 200)}
                 placeholder="@Ajouter"
-                className="w-32 bg-dark-800 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-discord"
+                className="w-32 bg-dark-800 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-theme-primary placeholder-theme-muted focus:outline-none focus:border-discord"
               />
               {showRoleDropdown && roleInput.includes("@") && (
                 <div className="absolute top-full left-0 mt-1 w-56 bg-dark-800 border border-dark-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
@@ -1715,7 +1715,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                           className="w-3 h-3 rounded-full" 
                           style={{ backgroundColor: role.color }}
                         />
-                        <span className="text-white text-sm">@{role.name}</span>
+                        <span className="text-theme-primary text-sm">@{role.name}</span>
                       </button>
                     ))
                   )}
@@ -1748,13 +1748,13 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                   placeholder="Rechercher par pseudo ou raison..."
                   value={historySearch}
                   onChange={(e) => setHistorySearch(e.target.value)}
-                  className="w-full bg-dark-900 border border-dark-700 rounded-lg pl-10 pr-4 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg pl-10 pr-4 py-1.5 text-sm text-theme-primary placeholder-theme-muted focus:outline-none focus:border-purple-500"
                 />
               </div>
               <select
                 value={historyFilter}
                 onChange={(e) => setHistoryFilter(e.target.value as any)}
-                className="bg-dark-900 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
+                className="bg-dark-900 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-theme-primary focus:outline-none"
               >
                 <option value="all">Tous</option>
                 <option value="banned">Bannis</option>
@@ -1763,7 +1763,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
               <select
                 value={historyDateFilter}
                 onChange={(e) => setHistoryDateFilter(e.target.value as any)}
-                className="bg-dark-900 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
+                className="bg-dark-900 border border-dark-700 rounded-lg px-3 py-1.5 text-sm text-theme-primary focus:outline-none"
               >
                 <option value="all">Toute la période</option>
                 <option value="today">Aujourd'hui</option>
@@ -1793,7 +1793,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-white text-sm font-medium">{h.username}</span>
+                      <span className="text-theme-primary text-sm font-medium">{h.username}</span>
                       {h.unbannedAt && (
                         <span className="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full">Débanni</span>
                       )}
@@ -1984,7 +1984,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
           <div className="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-dark-700" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold">Mute {muteModal.username}</h3>
-              <button onClick={() => setMuteModal(null)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setMuteModal(null)} className="text-theme-secondary hover:text-theme-primary">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2041,7 +2041,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
           <div className="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-dark-700" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-red-400">Bannir {banModal.username}</h3>
-              <button onClick={() => setBanModal(null)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setBanModal(null)} className="text-theme-secondary hover:text-theme-primary">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2082,7 +2082,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
           <div className="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-dark-700" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-orange-400">Exclure {kickModal.username}</h3>
-              <button onClick={() => setKickModal(null)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setKickModal(null)} className="text-theme-secondary hover:text-theme-primary">
                 <X className="w-5 h-5" />
               </button>
             </div>

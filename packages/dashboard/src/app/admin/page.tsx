@@ -392,7 +392,7 @@ export default function AdminPage() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-8">
-        <Link href="/" className="text-theme-secondary hover:text-white transition">
+        <Link href="/" className="text-theme-secondary hover:text-theme-primary transition">
           <ArrowLeft className="w-6 h-6" />
         </Link>
         <div className="w-12 h-12 rounded-xl bg-theme-tertiary flex items-center justify-center">
@@ -442,7 +442,7 @@ export default function AdminPage() {
           <select
             value={tableRoleFilter}
             onChange={(e) => setTableRoleFilter(e.target.value as any)}
-            className="bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord"
+            className="bg-theme-primary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-primary focus:outline-none focus:border-discord"
           >
             <option value="ALL">Tous les rôles</option>
             <option value="OWNER">Owner</option>
@@ -511,7 +511,7 @@ export default function AdminPage() {
           className={`px-4 py-2 rounded-lg font-medium transition ${
             adminView === "members"
               ? "bg-discord text-white"
-              : "bg-theme-tertiary text-theme-secondary hover:text-white"
+              : "bg-theme-tertiary text-theme-secondary hover:text-theme-primary"
           }`}
         >
           <Users className="w-4 h-4 inline mr-2" />
@@ -522,7 +522,7 @@ export default function AdminPage() {
           className={`px-4 py-2 rounded-lg font-medium transition ${
             adminView === "discord-roles"
               ? "bg-yellow-600 text-white"
-              : "bg-theme-tertiary text-theme-secondary hover:text-white"
+              : "bg-theme-tertiary text-theme-secondary hover:text-theme-primary"
           }`}
         >
           <Shield className="w-4 h-4 inline mr-2" />
@@ -605,7 +605,7 @@ export default function AdminPage() {
                           <>
                             <button
                               onClick={() => handleShowPermissions(user)}
-                              className="p-2 text-theme-secondary hover:text-white transition"
+                              className="p-2 text-theme-secondary hover:text-theme-primary transition"
                               title="Permissions"
                             >
                               <Settings className="w-4 h-4" />
@@ -639,7 +639,7 @@ export default function AdminPage() {
             <select
               value={selectedDiscordRoleFilter}
               onChange={(e) => setSelectedDiscordRoleFilter(e.target.value)}
-              className="bg-theme-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500"
+              className="bg-theme-tertiary border border-theme-border rounded-lg px-3 py-2 text-sm text-theme-primary focus:outline-none focus:border-yellow-500"
             >
               <option value="ALL">Tous les rôles</option>
               {discordRoles.map((role) => (
@@ -708,7 +708,7 @@ export default function AdminPage() {
                       <td className="py-3 px-4 text-right">
                         <button
                           onClick={() => setEditingMemberRoles(member)}
-                          className="p-2 text-theme-secondary hover:text-white transition"
+                          className="p-2 text-theme-secondary hover:text-theme-primary transition"
                           title="Gérer les rôles"
                         >
                           <Settings className="w-4 h-4" />
@@ -736,7 +736,7 @@ export default function AdminPage() {
               Si vous nommez <strong>{pendingRoleChange.user.username}</strong> comme OWNER, vous serez automatiquement rétrogradé au rang d'ADMIN et perdrez la gestion du staff.
             </p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setPendingRoleChange(null)} className="px-4 py-2 text-theme-secondary hover:text-white transition">
+              <button onClick={() => setPendingRoleChange(null)} className="px-4 py-2 text-theme-secondary hover:text-theme-primary transition">
                 Annuler
               </button>
               <button
@@ -761,7 +761,7 @@ export default function AdminPage() {
             </h3>
             <p className="text-theme-secondary mb-4">Cette action est irréversible.</p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-theme-secondary hover:text-white transition">
+              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-theme-secondary hover:text-theme-primary transition">
                 Annuler
               </button>
               <button
@@ -788,7 +788,7 @@ export default function AdminPage() {
                 </h3>
                 <p className="text-theme-secondary text-sm">Gérer les permissions par serveur</p>
               </div>
-              <button onClick={() => setShowPermissions(false)} className="text-theme-secondary hover:text-white">
+              <button onClick={() => setShowPermissions(false)} className="text-theme-secondary hover:text-theme-primary">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -847,7 +847,7 @@ export default function AdminPage() {
                 </h3>
                 <p className="text-theme-secondary text-sm">Ajouter ou retirer des rôles Discord</p>
               </div>
-              <button onClick={() => setEditingMemberRoles(null)} className="text-theme-secondary hover:text-white">
+              <button onClick={() => setEditingMemberRoles(null)} className="text-theme-secondary hover:text-theme-primary">
                 <X className="w-5 h-5" />
               </button>
             </div>
