@@ -2,7 +2,6 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Providers } from "@/components/Providers";
 import { Navbar } from "@/components/Navbar";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 
@@ -37,7 +36,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <Providers>
             <Navbar />
-            <LanguageSwitcher />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               {children}
             </main>

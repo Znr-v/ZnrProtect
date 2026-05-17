@@ -25,6 +25,7 @@ export function Navbar() {
             className="p-2 text-sm font-semibold tracking-wide rounded-lg transition hover:bg-theme-tertiary flex items-center gap-1.5"
             title={language === "fr" ? "Switch to English" : "Passer en Français"}
           >
+            <Globe className="w-4 h-4" />
             <span className="sr-only">{language}</span>
           </button>
           <ThemeToggle />
