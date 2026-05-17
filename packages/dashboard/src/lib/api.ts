@@ -14,9 +14,7 @@ export function setAuthToken(token: string | null) {
 type ApiFetchOptions = Omit<RequestInit, "body"> & { body?: object | string | FormData };
 
 export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const headers: Record<string, string> = {};
 
   if (currentToken) {
     headers["Authorization"] = `Bearer ${currentToken}`;
@@ -25,6 +23,7 @@ export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Prom
   let finalOptions: RequestInit = { ...options, headers } as RequestInit;
 
   if (options?.body && typeof options.body === "object") {
+    headers["Content-Type"] = "application/json";
     finalOptions.body = JSON.stringify(options.body);
   }
 

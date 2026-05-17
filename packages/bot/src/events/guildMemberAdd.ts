@@ -6,6 +6,20 @@ import { calculateRiskScore } from "../modules/riskScore";
 export async function onGuildMemberAdd(ctx: BotContext, member: GuildMember) {
   const guildId = member.guild.id;
 
+  // Check if lockdown is active
+  const dbGuild = await ctx.prisma.guild.findUnique({ where: { id: guildId } });
+  if (dbGuild?.lockdownActive) {
+    try {
+      await member.send("Le serveur est actuellement en mode lockdown (verrouillé). Vous ne pouvez pas le rejoindre pour le moment.");
+    } catch {}
+    try {
+      await member.kick("Serveur en lockdown");
+    } catch (err) {
+      console.error(`[!] Failed to kick member ${member.id} during lockdown:`, err);
+    }
+    return;
+  }
+
   // Upsert member in DB
   const accountAge = member.user.createdAt;
   const dbMember = await ctx.prisma.member.upsert({

@@ -14,6 +14,7 @@ import { configRoutes } from "./routes/config";
 import { modActionsRoutes } from "./routes/mod actions";
 import { botLogsRoutes } from "./routes/bot-logs";
 import { adminAuthRoutes } from "./routes/admin-auth";
+import { roleRoutes } from "./routes/roles";
 import { getDiscordIdFromRequest } from "./lib/permissions";
 
 const prisma = new PrismaClient();
@@ -56,6 +57,7 @@ app.register(configRoutes, { prefix: "/api/config" });
 app.register(modActionsRoutes, { prefix: "/api" });
 app.register(botLogsRoutes, { prefix: "/api/logs" });
 app.register(adminAuthRoutes, { prefix: "/api/admin" });
+app.register(roleRoutes, { prefix: "/api/roles" });
 
 app.setErrorHandler((error, request, reply) => {
   console.error(error);

@@ -11,6 +11,38 @@ export const DASHBOARD_PERMISSIONS = {
 export type DashboardPermission =
   typeof DASHBOARD_PERMISSIONS[keyof typeof DASHBOARD_PERMISSIONS];
 
+export const DISCORD_PERMISSIONS = {
+  KICK: "KICK",
+  BAN: "BAN",
+  MUTE: "MUTE",
+  MANAGE_CHANNELS: "MANAGE_CHANNELS",
+  MANAGE_ROLES: "MANAGE_ROLES",
+  MANAGE_MESSAGES: "MANAGE_MESSAGES",
+  VIEW_AUDIT_LOG: "VIEW_AUDIT_LOG",
+  MANAGE_MEMBERS: "MANAGE_MEMBERS",
+} as const;
+
+export type DiscordPermission =
+  typeof DISCORD_PERMISSIONS[keyof typeof DISCORD_PERMISSIONS];
+
+export const ALL_PANEL_PERMISSIONS = [
+  "VIEW_LOGS",
+  "MANAGE_GUILD",
+  "MANAGE_MEMBERS",
+  "MANAGE_ROLES",
+] as const;
+
+export const ALL_DISCORD_PERMISSIONS = [
+  "KICK",
+  "BAN",
+  "MUTE",
+  "MANAGE_CHANNELS",
+  "MANAGE_ROLES",
+  "MANAGE_MESSAGES",
+  "VIEW_AUDIT_LOG",
+  "MANAGE_MEMBERS",
+] as const;
+
 export async function getDiscordIdFromRequest(
   request: FastifyRequest
 ): Promise<string | null> {

@@ -8,3 +8,9 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+# OpenCode Agent Manager
+.opencode_history.json
+opencode_handoff.txt
+.opencode_prompt_*.txt
+instruction.txt

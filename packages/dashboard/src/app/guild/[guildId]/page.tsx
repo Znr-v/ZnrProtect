@@ -26,7 +26,7 @@ type Event = { id: string; type: string; severity: string; actorId: string; acto
 type Member = { id: string; discordId: string; username: string; riskScore: number; quarantined: boolean; trusted: boolean; messageCount: number; warnCount: number; timedOutUntil?: string | null; avatar?: string | null; roleIds?: string[] };
 type BotActionLog = { id: string; action: string; targetId?: string; targetName?: string; moderatorId?: string; moderatorName?: string; reason?: string; details?: any; createdAt: string };
 
-type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config";
+type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config" | "roles";
 
 function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string; onUpdate?: (m: Member) => void }) {
   const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
@@ -644,13 +644,14 @@ export default function GuildPage() {
   const { getGuildRole, loaded: roleLoaded } = useDashboardUser();
   const role = getGuildRole(guildId) || "VIEWER";
   
-  const allTabs: { key: Tab; label: string; icon: React.ReactNode; roles: string[] }[] = [
+  const allTabs: { key: Tab; label: string; icon: React.ReactNode; roles: string[]; href?: string }[] = [
     { key: "overview", label: "Vue d'ensemble", icon: <Shield className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
     { key: "incidents", label: "Incidents", icon: <AlertTriangle className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
     { key: "events", label: "Events", icon: <Activity className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
     { key: "members", label: "Membres", icon: <Users className="w-4 h-4" />, roles: ["OWNER", "ADMIN", "MODERATOR"] },
     { key: "logs", label: "Logs", icon: <ScrollText className="w-4 h-4" />, roles: ["OWNER", "ADMIN"] },
     { key: "config", label: "Config", icon: <Settings className="w-4 h-4" />, roles: ["OWNER"] },
+    { key: "roles", label: "Rôles", icon: <Shield className="w-4 h-4" />, roles: ["OWNER", "ADMIN"], href: `/guild/${guildId}/configs` },
   ];
   const tabs = allTabs.filter(t => t.roles.includes(role));
 
@@ -1055,15 +1056,25 @@ function LogsTab({ logs, members = [] }: { logs: BotActionLog[]; members?: Membe
 
       <div className="flex gap-1 mb-6 bg-dark-800 p-1 rounded-xl w-fit border border-dark-700">
         {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-              tab === t.key ? "bg-discord text-white" : "text-gray-400 hover:text-white"
-            }`}
-          >
-            {t.icon} {t.label}
-          </button>
+          t.href ? (
+            <Link
+              key={t.key}
+              href={t.href}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition text-gray-400 hover:text-white"
+            >
+              {t.icon} {t.label}
+            </Link>
+          ) : (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key as Tab)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                tab === t.key ? "bg-discord text-white" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {t.icon} {t.label}
+            </button>
+          )
         ))}
       </div>
 

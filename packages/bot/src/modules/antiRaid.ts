@@ -107,12 +107,23 @@ export async function activateLockdown(
     data: { lockdownActive: true, lockdownAt: new Date() },
   });
 
-  // Restrict @everyone from sending messages in all text channels
+  // Delete all existing invites
+  try {
+    const invites = await guild.invites.fetch();
+    for (const [, invite] of invites) {
+      await invite.delete("Lockdown activated");
+    }
+  } catch (err) {
+    console.error(`[!] Failed to delete invites during lockdown for guild ${guild.id}:`, err);
+  }
+
+  // Restrict @everyone from sending messages and creating invites in all text channels
   for (const [, channel] of guild.channels.cache) {
     if (channel.type === ChannelType.GuildText) {
       try {
         await channel.permissionOverwrites.edit(guild.roles.everyone, {
           SendMessages: false,
+          CreateInstantInvite: false,
         });
       } catch {}
     }
@@ -141,6 +152,7 @@ export async function deactivateLockdown(ctx: BotContext, guild: Guild) {
       try {
         await channel.permissionOverwrites.edit(guild.roles.everyone, {
           SendMessages: null,
+          CreateInstantInvite: null,
         });
       } catch {}
     }
