@@ -7,23 +7,29 @@ export async function logBotAction(
   data: {
     targetId?: string;
     targetName?: string;
+    moderatorId?: string;
+    moderatorName?: string;
+    channelId?: string;
+    executedBy?: string;
     reason?: string;
     details?: any;
   }
 ) {
-  console.log(`[BOTLOG] Creating log: action=${action}, targetId=${data.targetId}, guildId=${guildId}`);
   try {
-    const result = await prisma.botActionLog.create({
+    await prisma.botActionLog.create({
       data: {
         guildId,
         action,
         targetId: data.targetId,
         targetName: data.targetName,
+        moderatorId: data.moderatorId,
+        moderatorName: data.moderatorName,
+        channelId: data.channelId,
+        executedBy: data.executedBy || "bot",
         reason: data.reason,
-        details: data.details,
+        details: data.details || {},
       },
     });
-    console.log(`[BOTLOG] Created log ID: ${result.id}`);
   } catch (e) {
     console.error("Failed to log bot action:", e);
   }

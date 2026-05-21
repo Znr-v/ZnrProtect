@@ -327,6 +327,86 @@ export async function modActionsRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post("/guilds/:guildId/members/:memberId/lift-quarantine", async (request, reply) => {
+    const { guildId, memberId } = request.params as { guildId: string; memberId: string };
+    const client = (request as any).client;
+    const prisma = (request as any).prisma;
+    const discordId = (await getDiscordIdFromRequest(request)) ?? undefined;
+
+    try {
+      await requirePermission(prisma, discordId, guildId, DASHBOARD_PERMISSIONS.MANAGE_MEMBERS);
+    } catch {
+      return reply.status(403).send({ error: "Permission insuffisante" });
+    }
+
+    try {
+      if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
+
+      const guild = await client.guilds.fetch(guildId);
+      if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
+
+      const member = await guild.members.fetch(memberId).catch(() => null);
+      if (!member) return reply.status(404).send({ error: "Membre introuvable" });
+
+      // Get quarantine role
+      const config = await prisma.guildConfig.findUnique({ where: { guildId } });
+      const quarantineRoleId = config?.quarantineRoleId;
+      const quarantineRole = quarantineRoleId 
+        ? guild.roles.cache.get(quarantineRoleId) 
+        : guild.roles.cache.find(r => r.name === "Quarantaine");
+
+      if (!quarantineRole) {
+        return reply.status(404).send({ error: "Rôle Quarantaine non trouvé" });
+      }
+
+      // Get stored roles before removing quarantine role
+      const quarantineRecord = await prisma.quarantinedMember.findUnique({
+        where: { guildId_discordId: { guildId, discordId: memberId } },
+      });
+      const originalRoles = quarantineRecord?.roles || [];
+
+      // Remove quarantine role
+      if (member.roles.cache.has(quarantineRole.id)) {
+        await member.roles.remove(quarantineRole, "Quarantaine levée depuis le dashboard");
+      }
+
+      // Restore original roles
+      if (originalRoles.length > 0) {
+        const rolesToRestore = originalRoles
+          .map(id => guild.roles.cache.get(id))
+          .filter((r): r is any => r !== undefined);
+
+        if (rolesToRestore.length > 0) {
+          await member.roles.add(rolesToRestore, "Rôles restaurés depuis le dashboard");
+        }
+      }
+
+      // Delete quarantine record
+      if (quarantineRecord) {
+        await prisma.quarantinedMember.delete({
+          where: { guildId_discordId: { guildId, discordId: memberId } },
+        });
+      }
+
+      await logBotAction(prisma, guildId, "QUARANTINE_LIFT", {
+        targetId: memberId,
+        targetName: member.user.tag,
+        details: { rolesRestored: originalRoles.length },
+      });
+
+      await logAudit(prisma, discordId!, "LIFT_QUARANTINE", {
+        guildId,
+        targetId: memberId,
+        metadata: { rolesRestored: originalRoles.length },
+      });
+
+      return reply.send({ success: true, message: "Quarantaine levée" });
+    } catch (e: any) {
+      console.error("Lift quarantine error:", e);
+      return reply.status(500).send({ error: e.message });
+    }
+  });
+
   app.post("/guilds/:guildId/members/:memberId/trust", async (request, reply) => {
     const { guildId, memberId } = request.params as { guildId: string; memberId: string };
     const { trusted } = (request.body as any) || {};

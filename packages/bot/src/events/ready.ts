@@ -20,7 +20,7 @@ export async function onReady(ctx: BotContext) {
   }
   console.log("[+] Guilds synchronisées avec la DB");
 
-  // Scan all existing members into DB
+  // Scan all existing members into DB (including bots)
   for (const [, guild] of ctx.client.guilds.cache) {
     console.log(`[+] Scan des membres de ${guild.name}...`);
     try {
@@ -31,8 +31,9 @@ export async function onReady(ctx: BotContext) {
     }
 
     let synced = 0;
+    let botsSynced = 0;
     for (const [, member] of guild.members.cache) {
-      if (member.user.bot) continue;
+      const isBot = member.user.bot;
       try {
         const dbMember = await ctx.prisma.member.upsert({
           where: { discordId_guildId: { discordId: member.id, guildId: guild.id } },
@@ -41,11 +42,17 @@ export async function onReady(ctx: BotContext) {
             guildId: guild.id,
             username: member.user.username,
             accountAge: member.user.createdAt,
+            isBot: isBot,
           },
           update: {
             username: member.user.username,
+            isBot: isBot,
           },
         });
+        
+        if (isBot) {
+          botsSynced++;
+        }
 
         // Calculate risk score if not already set
         if (dbMember.riskScore === 0) {
@@ -57,7 +64,7 @@ export async function onReady(ctx: BotContext) {
         console.error(`[!] Erreur sync membre ${member.id}:`, e);
       }
     }
-    console.log(`[+] ${synced} membres synchronisés pour ${guild.name}`);
+    console.log(`[+] ${synced} membres synchronisés pour ${guild.name} (dont ${botsSynced} bots)`);
   }
 
   // Take initial audit snapshot for each guild

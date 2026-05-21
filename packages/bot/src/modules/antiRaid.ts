@@ -1,6 +1,8 @@
-import { Guild, ChannelType } from "discord.js";
+import { Guild, ChannelType, GuildMember } from "discord.js";
 import { GuildConfig } from "@prisma/client";
 import { BotContext } from "../index";
+import { executeSanction, ensureQuarantineRole } from "../services/quarantine";
+import { logBotAction } from "../lib/botLogs";
 
 export async function evaluateRaidScore(
   ctx: BotContext,
@@ -20,17 +22,17 @@ export async function evaluateRaidScore(
   const members = await Promise.all(
     memberIds.map((id) => guild.members.fetch(id).catch(() => null))
   );
-  const validMembers = members.filter(Boolean);
+  const validMembers = members.filter((m): m is GuildMember => m !== null);
 
   // Check account ages
   const youngAccounts = validMembers.filter((m) => {
-    const ageMs = Date.now() - m!.user.createdTimestamp;
+    const ageMs = Date.now() - m.user.createdTimestamp;
     const ageDays = ageMs / (1000 * 60 * 60 * 24);
     return ageDays < config.raidMinAccountAge;
   });
 
   // Check name similarity (simple approach: check for common prefix/suffix)
-  const names = validMembers.map((m) => m!.user.username.toLowerCase());
+  const names = validMembers.map((m) => m.user.username.toLowerCase());
   const namePairs = new Set<string>();
   for (let i = 0; i < names.length; i++) {
     for (let j = i + 1; j < names.length; j++) {
@@ -95,6 +97,53 @@ export async function evaluateRaidScore(
       `${namePairs.size} paires de noms similaires\n` +
       `Incident: \`${incident.id}\``
   );
+
+  // Ensure quarantine role exists once before parallel operations
+  await ensureQuarantineRole(ctx, guild).catch(() => {});
+
+  // Create a security event per member, then quarantine all in parallel
+  await Promise.allSettled(
+    validMembers.map(async (member) => {
+      const reason = `Raid détecté (score: ${raidScore}/100) — Anti mass join`;
+      const success = await executeSanction(ctx, member, "QUARANTINE", reason, config.defaultTimeoutMinutes)
+        .catch((e: any) => {
+          console.log(`[RAID] ❌ Échec quarantine pour ${member.user.tag}: ${e}`);
+          return false;
+        });
+
+      await ctx.prisma.securityEvent.create({
+        data: {
+          guildId: guild.id,
+          type: "QUARANTINE_APPLIED",
+          severity: "HIGH",
+          actorId: member.id,
+          description: success
+            ? `Membre mis en quarantine: ${member.user.tag} — ${reason}`
+            : `Échec quarantine pour ${member.user.tag} — ${reason}`,
+          metadata: {
+            raidScore,
+            incidentId: incident.id,
+            success,
+            username: member.user.tag,
+          },
+          incidentId: incident.id,
+        },
+      });
+
+      if (success) {
+        await ctx.prisma.incidentAction.create({
+          data: {
+            incidentId: incident.id,
+            action: "quarantine",
+            targetId: member.id,
+            executedBy: "bot",
+            reason,
+            metadata: { username: member.user.tag, raidScore },
+          },
+        });
+      }
+    })
+  );
 }
 
 export async function activateLockdown(
@@ -139,6 +188,12 @@ export async function activateLockdown(
       },
     });
   }
+
+  logBotAction(ctx.prisma, guild.id, "LOCKDOWN_ON", {
+    executedBy: "bot",
+    reason: "Lockdown automatique anti-raid",
+    details: { incidentId, invitesDeleted: true },
+  });
 }
 
 export async function deactivateLockdown(ctx: BotContext, guild: Guild) {
@@ -157,6 +212,11 @@ export async function deactivateLockdown(ctx: BotContext, guild: Guild) {
       } catch {}
     }
   }
+
+  logBotAction(ctx.prisma, guild.id, "LOCKDOWN_OFF", {
+    executedBy: "bot",
+    reason: "Lockdown désactivé",
+  });
 }
 
 async function alertModerators(ctx: BotContext, guild: Guild, message: string) {

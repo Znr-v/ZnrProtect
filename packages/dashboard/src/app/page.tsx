@@ -51,7 +51,7 @@ export default function Home() {
         </div>
 
         <h1 className="text-4xl font-extrabold mb-3 tracking-tight">
-          Security Bot
+          ZnrProtect
           <span className="text-discord"> Dashboard</span>
         </h1>
         <p className="text-theme-secondary mb-8 max-w-md text-base leading-relaxed">

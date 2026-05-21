@@ -1,6 +1,8 @@
 import { Message } from "discord.js";
+import { ActionType } from "@prisma/client";
 import { BotContext } from "../index";
 import { logBotAction } from "../lib/botLogs";
+import { executeSanction } from "../services/quarantine";
 
 export async function checkSpam(ctx: BotContext, message: Message) {
   if (!message.guild) return;
@@ -20,7 +22,14 @@ export async function checkSpam(ctx: BotContext, message: Message) {
   await ctx.redis.zremrangebyscore(msgKey1s, 0, now - 1000);
   const msgCount1s = await ctx.redis.zcard(msgKey1s);
 
-  // Track messages in last 10 seconds (sustained spam)
+  // Track messages in last 5 seconds (sustained spam for bots)
+  const msgKey5s = `spam:msg5s:${guildId}:${userId}`;
+  await ctx.redis.zadd(msgKey5s, now, `${message.id}:${now}`);
+  await ctx.redis.expire(msgKey5s, 8);
+  await ctx.redis.zremrangebyscore(msgKey5s, 0, now - 5000);
+  const msgCount5s = await ctx.redis.zcard(msgKey5s);
+
+  // Also track 10s for regular users
   const msgKey10s = `spam:msg10s:${guildId}:${userId}`;
   await ctx.redis.zadd(msgKey10s, now, `${message.id}:${now}`);
   await ctx.redis.expire(msgKey10s, 12);
@@ -33,7 +42,6 @@ export async function checkSpam(ctx: BotContext, message: Message) {
   const roleMentions = message.mentions.roles.size;
   const everyoneMention = message.mentions.everyone ? 1 : 0;
   
-  // Count actual @mentions in content (including duplicates)
   const mentionRegex = /<@!?(\d+)>/g;
   const roleRegex = /<@&(\d+)>/g;
   const userMentionMatches = (message.content.match(mentionRegex) || []).length;
@@ -53,129 +61,135 @@ export async function checkSpam(ctx: BotContext, message: Message) {
   const existingList = await ctx.redis.lrange(msgListKey, 0, -1);
   const sameMsgCount = existingList.filter(m => m === currentMsg).length;
 
-  // Store ALL messages to count repetitions
   await ctx.redis.rpush(msgListKey, currentMsg);
   await ctx.redis.ltrim(msgListKey, -30, -1);
   await ctx.redis.expire(msgListKey, 60);
 
-  // Accumulate all messages for logs
   const allMsgsKey = `spam:allmsgs:${guildId}:${userId}`;
   await ctx.redis.rpush(allMsgsKey, `[${new Date().toLocaleTimeString("fr-FR")}] ${currentMsg}`);
   await ctx.redis.ltrim(allMsgsKey, -30, -1);
   await ctx.redis.expire(allMsgsKey, 60);
 
-  // SPAM DETECTION FILTERS (using config values with defaults)
+  // SPAM DETECTION FILTERS
   const maxMsg1s = config.spamMaxMessages ?? 5;
   const maxMsg10s = config.spamMaxMessages10s ?? 8;
   const repeatThreshold = config.spamRepeatThreshold ?? 3;
   const maxMentions = config.spamMaxMentions ?? 3;
   const maxMentions10s = config.spamMaxMentions10s ?? 5;
 
-  const isFlood = msgCount1s >= maxMsg1s;
-  const isSustained = msgCount10s >= maxMsg10s;
+  // Track cross-channel messages (5s window)
+  const channelKey = `spam:channels:${guildId}:${userId}`;
+  const channelId = message.channel.id;
+  await ctx.redis.zadd(channelKey, now, `${channelId}:${now}`);
+  await ctx.redis.expire(channelKey, 8);
+  await ctx.redis.zremrangebyscore(channelKey, 0, now - 5000);
+  const channelEntries = await ctx.redis.zrange(channelKey, 0, -1);
+  const uniqueChannels = new Set(channelEntries.map(e => e.split(':')[0]));
+  const crossChannelCount = uniqueChannels.size;
+
+  const isBotUser = message.author.bot;
+  const useBotConfig = config.scanBots && isBotUser;
+  const botCrossChannelThreshold = config.botSpamCrossChannel ?? 2;
+  const isCrossChannelSpam = crossChannelCount >= (useBotConfig ? botCrossChannelThreshold : 3);
+
+  const effectiveMaxMsg1s = useBotConfig ? (config.botSpamMaxMessages ?? 3) : maxMsg1s;
+  const effectiveMaxMsg5s = useBotConfig ? (config.botSpamMaxMessages5s ?? 5) : maxMsg10s;
+
+  const isFlood = msgCount1s >= effectiveMaxMsg1s;
+  const isSustained = msgCount5s >= effectiveMaxMsg5s;
   const isRepeat = sameMsgCount + 1 >= repeatThreshold;
   const isMentionSpam = mentionCount > maxMentions;
   const isMentionFlood = totalMentions > maxMentions10s;
 
-  const isSpam = isFlood || isSustained || isRepeat || isMentionSpam || isMentionFlood;
-
-  console.log(`[SPAM CHECK] 1s=${msgCount1s}/${maxMsg1s}, 10s=${msgCount10s}/${maxMsg10s}, repeat=${sameMsgCount + 1}/${repeatThreshold}, mentions=${mentionCount}/${maxMentions}, totalMentions=${totalMentions}/${maxMentions10s} => isSpam=${isSpam}`);
+  const isSpam = isFlood || isSustained || isRepeat || isMentionSpam || isMentionFlood || isCrossChannelSpam;
 
   if (!isSpam) return;
 
-  console.log(`[SPAM] Spam detected! flood=${isFlood} sustained=${isSustained} repeat=${isRepeat} mentionSpam=${isMentionSpam} mentionFlood=${isMentionFlood}`);
+  // Cooldown to prevent duplicate sanctions
+  const processedKey = `spam:processed:${guildId}:${userId}`;
+  const alreadyProcessed = await ctx.redis.get(processedKey);
+  
+  if (alreadyProcessed) {
+    console.log(`[SPAM] ⏭️ Already processed recently, skipping: ${message.author.tag}`);
+    return;
+  }
 
-  const authorName = message.webhookId 
-    ? (message.author?.username || `Webhook ${message.webhookId}`) 
-    : message.author.tag;
+  const member = await message.guild.members.fetch(userId).catch(() => null);
+  if (!member) return;
 
-  // Determine spam reason for logs
+  // Determine spam reason
   let spamReason = "";
   if (isFlood) spamReason += `Flood (${msgCount1s} msgs/1s)`;
-  if (isSustained) spamReason += (spamReason ? " + " : "") + `Spam soutenu (${msgCount10s} msgs/10s)`;
+  if (isSustained) spamReason += (spamReason ? " + " : "") + `Spam soutenu (${msgCount5s} msgs/5s)`;
   if (isRepeat) spamReason += (spamReason ? " + " : "") + `Répétition (${sameMsgCount + 1}x même message)`;
   if (isMentionSpam) spamReason += (spamReason ? " + " : "") + `Mentions abusives (${mentionCount} mentions)`;
   if (isMentionFlood) spamReason += (spamReason ? " + " : "") + `Mention flood (${totalMentions} mentions/10s)`;
+  if (isCrossChannelSpam) spamReason += (spamReason ? " + " : "") + `Multi-salon (${crossChannelCount} salons en 5s)`;
 
-  // MUTE FIRST
-  if (!message.webhookId) {
-    try {
-      const member = await message.guild.members.fetch(userId).catch(() => null);
-      if (member) {
-        const muteDuration = (config.spamMuteDuration ?? 5) * 60 * 1000;
-        const timeoutUntil = new Date(Date.now() + muteDuration);
-        await member.timeout(muteDuration, `Anti-spam: ${spamReason}`);
-        console.log(`[SPAM] ✅ Mute applied (${config.spamMuteDuration ?? 5} min)`);
-        await logBotAction(ctx.prisma, guildId, "MUTE", {
-          targetId: userId,
-          targetName: message.author.tag,
-          reason: `Anti-spam automatique - ${spamReason}`,
-          details: { duration: config.spamMuteDuration ?? 5, endDate: timeoutUntil.toISOString(), channel: message.channel.name, spamReason },
-        });
-        await ctx.prisma.member.updateMany({
-          where: { discordId: userId, guildId },
-          data: { timedOutUntil: timeoutUntil },
-        });
-      }
-    } catch (e) {
-      console.log(`[SPAM] ❌ Mute failed: ${e}`);
-    }
+  console.log(`[SPAM] Détecté: ${message.author.tag} - ${spamReason}`);
+
+  // Determine sanction based on type
+  let sanction: ActionType;
+  if (isBotUser && useBotConfig) {
+    sanction = (config.botSpamSanction as ActionType) || "KICK";
+  } else if (isCrossChannelSpam) {
+    // Cross-channel spam uses bot sanction if bot, otherwise default spam sanction
+    sanction = isBotUser 
+      ? ((config.botSpamSanction as ActionType) || "KICK")
+      : ((config.spamSanction as ActionType) || "TIMEOUT");
+  } else {
+    sanction = (config.spamSanction as ActionType) || "TIMEOUT";
   }
 
-  // Delete messages AFTER muting (if enabled)
+  // Execute sanction
+  await ctx.redis.set(processedKey, "1", "EX", 30);
+  
+  const timeoutMinutes = config.defaultTimeoutMinutes ?? 5;
+  const success = await executeSanction(ctx, member, sanction, `Anti-spam: ${spamReason}`, timeoutMinutes);
+
+  if (success) {
+    await logBotAction(ctx.prisma, guildId, sanction, {
+      targetId: userId,
+      targetName: message.author.tag,
+      reason: `Anti-spam automatique - ${spamReason}`,
+      details: { channel: message.channel.isTextBased() && "name" in message.channel ? message.channel.name : "unknown", spamType: isCrossChannelSpam ? "cross_channel" : "general" },
+    });
+  }
+
+  // Delete messages
   let deletedCount = 1;
   if (config.spamAutoDelete !== false) {
     try {
-      const messages = await message.channel.messages.fetch({ limit: 100 });
-      const userMessages = messages.filter(m => 
-        m.id !== message.id &&
-        ((message.webhookId && m.webhookId === message.webhookId) ||
-        m.author.id === userId)
-      );
-      const deletePromises = [];
-      for (const [_, msg] of userMessages) {
-        deletePromises.push(msg.delete().catch(() => {}));
-        deletedCount++;
+      if (isCrossChannelSpam && message.guild) {
+        const textChannels = Array.from(message.guild.channels.cache.values()).filter(c => c.isTextBased() && c.isSendable());
+        for (const channel of textChannels) {
+          try {
+            const messages = await channel.messages.fetch({ limit: 100 });
+            const userMessages = messages.filter(m => m.author.id === userId);
+            for (const [, msg] of userMessages) {
+              try { await msg.delete(); deletedCount++; } catch {}
+            }
+          } catch {}
+        }
+      } else {
+        const messages = await message.channel.messages.fetch({ limit: 100 });
+        const userMessages = messages.filter(m => 
+          m.id !== message.id &&
+          ((message.webhookId && m.webhookId === message.webhookId) ||
+          m.author.id === userId)
+        );
+        for (const [, msg] of userMessages) {
+          try { await msg.delete(); deletedCount++; } catch {}
+        }
       }
-      await Promise.allSettled(deletePromises);
     } catch (e) { 
-      console.log(`[SPAM] Failed to fetch messages: ${e}`); 
+      console.log(`[SPAM] Failed to delete messages: ${e}`); 
     }
   }
 
-  console.log(`[SPAM] Deleted ${deletedCount} messages total`);
-
-  // ONE log per spam wave
+  // Log once per spam wave
   const logKey = `spam:logged:${guildId}:${userId}`;
-  const alreadyLogged = await ctx.redis.get(logKey);
-  
-  if (!alreadyLogged) {
-    const allMessages = await ctx.redis.lrange(allMsgsKey, 0, -1);
-    try {
-      await logBotAction(ctx.prisma, guildId, "MESSAGE_DELETE", {
-        targetId: userId,
-        targetName: authorName,
-        reason: `Spam détecté - ${deletedCount} message${deletedCount > 1 ? "s" : ""} supprimé${deletedCount > 1 ? "s" : ""} sur #${message.channel.name}`,
-        details: { 
-          messagesSupprimes: deletedCount,
-          salon: message.channel.name,
-          type: message.webhookId ? "Webhook" : "Utilisateur",
-          spamReason,
-          messages: allMessages,
-        },
-      });
-      console.log(`[SPAM] Log created successfully`);
-    } catch (e) {
-      console.log(`[SPAM] ❌ Log failed: ${e}`);
-    }
-    await ctx.redis.set(logKey, "1", "EX", 60);
-  }
-
-  // ONE event per spam wave
-  const eventKey = `spam:event:${guildId}:${userId}`;
-  const alreadyEventLogged = await ctx.redis.get(eventKey);
-  
-  if (!alreadyEventLogged) {
+  if (!await ctx.redis.get(logKey)) {
     const allMessages = await ctx.redis.lrange(allMsgsKey, 0, -1);
     try {
       await ctx.prisma.securityEvent.create({
@@ -185,25 +199,18 @@ export async function checkSpam(ctx: BotContext, message: Message) {
           severity: isMentionSpam || isMentionFlood ? "HIGH" : "MEDIUM",
           actorId: message.webhookId || userId,
           channelId: message.channel.id,
-          description: `Spam détecté (${authorName}): ${spamReason}`,
+          description: `Spam détecté (${message.author.tag}): ${spamReason}`,
           metadata: {
-            authorName,
-            isWebhook: !!message.webhookId,
             spamReason,
+            sanction,
+            isBot: isBotUser,
+            crossChannel: isCrossChannelSpam,
             thresholds: {
               flood: `${maxMsg1s} msgs/1s`,
               sustained: `${maxMsg10s} msgs/10s`,
               repeat: `${repeatThreshold}x`,
-              mentions: `${maxMentions}/msg`,
-              mentionFlood: `${maxMentions10s}/10s`,
             },
-            messages1s: msgCount1s,
-            messages10s: msgCount10s,
-            mentionCount,
-            totalMentions,
-            repeatCount: sameMsgCount + 1,
             messagesSupprimes: deletedCount,
-            sanction: `Mute ${config.spamMuteDuration ?? 5} minutes`,
             messages: allMessages,
           },
         },
@@ -211,16 +218,16 @@ export async function checkSpam(ctx: BotContext, message: Message) {
     } catch (e) {
       console.log(`[SPAM] ❌ Event log failed: ${e}`);
     }
-    await ctx.redis.set(eventKey, "1", "EX", 60);
+    await ctx.redis.set(logKey, "1", "EX", 60);
   }
 
-  // Update risk score
+  // Update member warn count
   try {
     await ctx.prisma.member.updateMany({
       where: { discordId: userId, guildId },
       data: { warnCount: { increment: 1 } },
     });
   } catch (e) {
-    console.log(`[SPAM] ❌ Risk score update failed: ${e}`);
+    console.log(`[SPAM] ❌ Warn count update failed: ${e}`);
   }
 }

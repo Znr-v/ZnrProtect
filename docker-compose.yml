@@ -4,9 +4,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: secbot
-      POSTGRES_PASSWORD: secbot_password
-      POSTGRES_DB: secbot
+      POSTGRES_USER: znrprotect
+      POSTGRES_PASSWORD: znrprotect_password
+      POSTGRES_DB: znrprotect
     ports:
       - "5432:5432"
     volumes:

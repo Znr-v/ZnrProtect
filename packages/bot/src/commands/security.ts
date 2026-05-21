@@ -1,13 +1,17 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
-  EmbedBuilder,
   PermissionFlagsBits,
+  EmbedBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ActionRowBuilder,
 } from "discord.js";
 import { BotCommand } from "./index";
 import { BotContext } from "../index";
-import { activateLockdown, deactivateLockdown } from "../modules/antiRaid";
 import { t } from "../lib/i18n";
+import { applyQuarantine, liftQuarantine } from "../services/quarantine";
+import { activateLockdown, deactivateLockdown } from "../modules/antiRaid";
 
 export const securityCommand: BotCommand = {
   data: new SlashCommandBuilder()
@@ -230,53 +234,34 @@ async function handleQuarantine(ctx: BotContext, interaction: ChatInputCommandIn
   const translations = t[lang];
   const user = interaction.options.getUser("membre", true);
   const reason = interaction.options.getString("raison") || (lang === "fr" ? "Quarantaine manuelle" : "Manual quarantine");
-  const guildId = interaction.guildId!;
-
-  const config = await ctx.prisma.guildConfig.findUnique({ where: { guildId } });
-  if (!config?.quarantineRoleId) {
-    return interaction.reply({
-      content: translations.no_quarantine_role,
-      ephemeral: true,
-    });
-  }
-
+  
   const member = interaction.guild!.members.cache.get(user.id);
   if (!member) return interaction.reply({ content: translations.member_not_found_guild, ephemeral: true });
 
-  const role = interaction.guild!.roles.cache.get(config.quarantineRoleId);
-  if (!role) return interaction.reply({ content: translations.role_not_found, ephemeral: true });
+  const success = await applyQuarantine(ctx, member, reason, interaction.user.id);
 
-  await member.roles.add(role, reason);
-  await ctx.prisma.member.updateMany({
-    where: { discordId: user.id, guildId },
-    data: { quarantined: true },
-  });
-
-  await interaction.reply(translations.quarantine_success(user.tag, reason));
+  if (success) {
+    await interaction.reply(translations.quarantine_success(user.tag, reason));
+  } else {
+    await interaction.reply({ content: "❌ Impossible de mettre en quarantine (déjà en quarantine?)", ephemeral: true });
+  }
 }
 
 async function handleTrust(ctx: BotContext, interaction: ChatInputCommandInteraction) {
   const lang = ((interaction as any).language || "fr") as "en" | "fr";
   const translations = t[lang];
   const user = interaction.options.getUser("membre", true);
-  const guildId = interaction.guildId!;
+  
+  const member = interaction.guild!.members.cache.get(user.id);
+  if (!member) return interaction.reply({ content: translations.member_not_found_guild, ephemeral: true });
 
-  await ctx.prisma.member.updateMany({
-    where: { discordId: user.id, guildId },
-    data: { trusted: true, quarantined: false, riskScore: 0 },
-  });
+  const success = await liftQuarantine(ctx, member, lang === "fr" ? "Marqué comme fiable" : "Marked as trusted", true);
 
-  // Remove quarantine role if present
-  const config = await ctx.prisma.guildConfig.findUnique({ where: { guildId } });
-  if (config?.quarantineRoleId) {
-    const member = interaction.guild!.members.cache.get(user.id);
-    const role = interaction.guild!.roles.cache.get(config.quarantineRoleId);
-    if (member && role && member.roles.cache.has(role.id)) {
-      await member.roles.remove(role, lang === "fr" ? "Marqué comme fiable" : "Marked as trusted");
-    }
+  if (success) {
+    await interaction.reply(translations.trust_success(user.tag));
+  } else {
+    await interaction.reply({ content: "❌ Membre non trouvé en quarantine", ephemeral: true });
   }
-
-  await interaction.reply(translations.trust_success(user.tag));
 }
 
 async function handleEmergency(ctx: BotContext, interaction: ChatInputCommandInteraction) {

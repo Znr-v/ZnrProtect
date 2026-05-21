@@ -46,8 +46,9 @@ model GuildConfig {
   raidJoinWindow       Int     @default(60) // secondes
   raidAutoLockdown     Boolean @default(true)
   raidMinAccountAge    Int     @default(3) // jours
+  raidSanction         ActionType @default(BAN)
 
-  // Anti-spam
+  // Anti-spam (users)
   spamMaxMessages      Int     @default(5)
   spamMaxMessages10s   Int     @default(8)
   spamRepeatThreshold  Int     @default(3)
@@ -55,20 +56,31 @@ model GuildConfig {
   spamMaxMentions10s   Int     @default(5)
   spamMuteDuration     Int     @default(5) // minutes
   spamAutoDelete       Boolean @default(true)
+  spamSanction         ActionType @default(TIMEOUT)
+
+  // Anti-spam (bots) - more sensitive
+  botSpamMaxMessages     Int     @default(3)
+  botSpamMaxMessages5s   Int     @default(5)
+  botSpamCrossChannel     Int     @default(2) // channels in 5s to trigger
+  botSpamSanction         ActionType @default(KICK)
 
   // Anti-phishing
-  phishingEnabled      Boolean @default(true)
-  phishingCheckRedirects Boolean @default(true)
+  phishingEnabled        Boolean @default(true)
+  phishingCheckRedirects  Boolean @default(true)
+  phishingSanction       ActionType @default(QUARANTINE)
 
   // Secrets
   secretScanEnabled    Boolean @default(true)
+  secretSanction       ActionType @default(QUARANTINE)
 
   // Scan bots
   scanBots             Boolean @default(false)
 
   // Quarantine
-  quarantineRoleId     String?
-  quarantineEnabled    Boolean @default(true)
+  quarantineRoleId       String?
+  quarantineEnabled      Boolean @default(true)
+  quarantineMinScore     Int     @default(61)
+  quarantineAutoOnJoin   Boolean @default(true)
 
   // Trust zones
   strictChannels       String[] @default([])
@@ -77,23 +89,28 @@ model GuildConfig {
   // Emergency
   emergencyEnabled     Boolean @default(true)
 
+  // Timeout global par défaut
+  defaultTimeoutMinutes Int    @default(5)
+
   updatedAt            DateTime @updatedAt
 }
 
 // ─── Logs d'actions du bot ───
 
 model BotActionLog {
-  id          String   @id @default(cuid())
-  guildId     String
-  guild       Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  action      String
-  targetId    String?
-  targetName  String?
-  moderatorId String?
+  id            String   @id @default(cuid())
+  guildId       String
+  guild         Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  action        String
+  targetId      String?
+  targetName    String?
+  moderatorId   String?
   moderatorName String?
-  reason      String?
-  details     Json?
-  createdAt   DateTime @default(now())
+  channelId     String?
+  executedBy    String   @default("bot") // "bot" or "moderator"
+  reason        String?
+  details       Json?
+  createdAt     DateTime @default(now())
 
   @@index([guildId, createdAt])
 }
@@ -106,6 +123,7 @@ model Member {
   guildId       String
   guild         Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
   username      String
+  isBot         Boolean   @default(false)
   joinedAt      DateTime  @default(now())
   accountAge    DateTime
   riskScore     Int       @default(0)
@@ -171,6 +189,16 @@ model SecurityEvent {
   @@index([type, severity])
 }
 
+// ─── Actions bot ───
+
+enum ActionType {
+  TIMEOUT
+  KICK
+  KICK_DELETE
+  BAN
+  QUARANTINE
+}
+
 // ─── Incidents ───
 
 enum IncidentStatus {
@@ -189,6 +217,8 @@ model Incident {
   severity      EventSeverity
   status        IncidentStatus  @default(NEW)
   description   String?
+  isBot         Boolean         @default(false)
+  actionType    String?         // kick, kick_delete, timeout, etc.
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   resolvedAt    DateTime?
@@ -440,4 +470,18 @@ model GuildRole {
 
   @@unique([guildId, discordRoleId])
   @@unique([guildId, name])
+}
+
+// ─── Quarantaine - stockage des rôles ───
+
+model QuarantinedMember {
+  id            String   @id @default(cuid())
+  guildId       String
+  discordId     String   // ID du membre mis en quarantaine
+  username      String
+  roles         String[] // IDs des rôles originaux (stockés quand quarantine appliquée)
+  quarantinedAt DateTime @default(now())
+  quarantinedBy String?  // ID du mod ou "AUTO"
+
+  @@unique([guildId, discordId])
 }

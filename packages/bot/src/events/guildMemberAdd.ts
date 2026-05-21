@@ -2,6 +2,7 @@ import { GuildMember } from "discord.js";
 import { BotContext } from "../index";
 import { evaluateRaidScore } from "../modules/antiRaid";
 import { calculateRiskScore } from "../modules/riskScore";
+import { applyQuarantine } from "../services/quarantine";
 
 export async function onGuildMemberAdd(ctx: BotContext, member: GuildMember) {
   const guildId = member.guild.id;
@@ -50,27 +51,21 @@ export async function onGuildMemberAdd(ctx: BotContext, member: GuildMember) {
   // Calculate initial risk score
   const score = await calculateRiskScore(ctx, member, dbMember);
 
-  // Auto-quarantine if high risk
-  if (score >= 61 && config?.quarantineEnabled && config.quarantineRoleId) {
+  // Auto-quarantine if high risk (using configurable threshold)
+  const minScore = config?.quarantineMinScore || 61;
+  if (config?.quarantineEnabled && config?.quarantineAutoOnJoin !== false && score >= minScore) {
     try {
-      const role = member.guild.roles.cache.get(config.quarantineRoleId);
-      if (role) {
-        await member.roles.add(role, "Score de risque élevé à l'arrivée");
-        await ctx.prisma.member.update({
-          where: { id: dbMember.id },
-          data: { quarantined: true },
-        });
-        await ctx.prisma.securityEvent.create({
-          data: {
-            guildId,
-            type: "QUARANTINE_APPLIED",
-            severity: score >= 81 ? "CRITICAL" : "HIGH",
-            actorId: member.id,
-            description: `Quarantaine auto — score de risque: ${score}`,
-            metadata: { score },
-          },
-        });
-      }
+      await applyQuarantine(ctx, member, `Score de risque élevé à l'arrivée (${score})`, "AUTO");
+      await ctx.prisma.securityEvent.create({
+        data: {
+          guildId,
+          type: "QUARANTINE_APPLIED",
+          severity: score >= 81 ? "CRITICAL" : "HIGH",
+          actorId: member.id,
+          description: `Quarantaine auto — score de risque: ${score}`,
+          metadata: { score },
+        },
+      });
     } catch (err) {
       console.error(`[!] Quarantine failed for ${member.id}:`, err);
     }

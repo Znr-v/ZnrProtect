@@ -1,3 +1,4 @@
+import { FastifyInstance } from "fastify";
 import { translate } from "../lib/i18n";
 import { getDiscordIdFromRequest, requireGuildAccess } from "../lib/permissions";
 

@@ -65,7 +65,7 @@ export const t = {
       "Utilise `/security unlock` quand la situation est résolue.",
 
     help_main: () => new EmbedBuilder()
-      .setTitle("🛡️ Security Bot — Centre d'aide")
+      .setTitle("🛡️ ZnrProtect — Centre d'aide")
       .setColor(EMBED_COLOR)
       .setDescription(
         "Bot de sécurité avancé pour Discord. Protection anti-raid, anti-spam, anti-phishing, " +
@@ -518,7 +518,7 @@ export const t = {
       "Use `/security unlock` when the situation is resolved.",
 
     help_main: () => new EmbedBuilder()
-      .setTitle("🛡️ Security Bot — Help Center")
+      .setTitle("🛡️ ZnrProtect — Help Center")
       .setColor(EMBED_COLOR)
       .setDescription(
         "Advanced security bot for Discord. Anti-raid, anti-spam, anti-phishing protection, " +

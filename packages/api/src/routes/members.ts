@@ -196,12 +196,27 @@ export async function memberRoutes(app: FastifyInstance) {
           
           const discordMemberIds = new Set(guild.members.cache.keys());
           
-          // Filter: only show members who are on the Discord server
-          const showBanned = quarantined === "true";
+          const showQuarantined = quarantined === "true";
+          
+          // Get quarantine role from config
+          const config = await prisma.guildConfig.findUnique({ where: { guildId } });
+          const quarantineRoleId = config?.quarantineRoleId;
+          
+          // Map member IDs to quarantine status based on Discord role
+          const memberQuarantineStatus = new Map<string, boolean>();
+          for (const [userId, member] of guild.members.cache) {
+            const hasQuarantineRole = quarantineRoleId 
+              ? member.roles.cache.has(quarantineRoleId)
+              : member.roles.cache.some(r => r.name === "Quarantaine");
+            memberQuarantineStatus.set(userId, hasQuarantineRole);
+          }
+          
+          // Filter: only show members that are still on Discord, unless showing quarantined
           members = dbMembers.filter(m => {
-            const isOnServer = discordMemberIds.has(m.discordId);
-            const isBanned = m.quarantined;
-            return isOnServer || (showBanned && isBanned);
+            const isOnDiscord = discordMemberIds.has(m.discordId);
+            const isQuarantinedOnDiscord = memberQuarantineStatus.get(m.discordId) || false;
+            // Always show quarantined (even if left server), otherwise only show if on Discord
+            return showQuarantined ? isQuarantinedOnDiscord : isOnDiscord;
           });
           
           const memberRoleMap = new Map<string, string[]>();
@@ -212,6 +227,8 @@ export async function memberRoutes(app: FastifyInstance) {
           members = members.map(m => {
             const discordMember = guild.members.cache.get(m.discordId);
             let avatar: string | null = null;
+            let isBot = false;
+            const isQuarantinedOnDiscord = memberQuarantineStatus.get(m.discordId) || false;
             if (discordMember?.user.avatar) {
               const hash = discordMember.user.avatar;
               const ext = hash.startsWith("a_") ? "gif" : "png";
@@ -220,10 +237,15 @@ export async function memberRoutes(app: FastifyInstance) {
               const defaultIndex = Number(discordMember.user.discriminator) % 5;
               avatar = `https://cdn.discordapp.com/embed/avatars/${defaultIndex}.png`;
             }
+            if (discordMember) {
+              isBot = discordMember.user.bot;
+            }
             return {
               ...m,
+              quarantined: isQuarantinedOnDiscord,
               roleIds: memberRoleMap.get(m.discordId) || [],
               avatar,
+              isBot,
             };
           });
         }

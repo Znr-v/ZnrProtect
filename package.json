@@ -1,12 +1,13 @@
 {
-  "name": "security-bot",
+  "name": "znrprotect",
   "private": true,
   "workspaces": ["packages/*", "prisma"],
   "scripts": {
     "dev:bot": "cd packages/bot && npm run dev",
+    "dev:test-bot": "cd packages/test-bot && npm run dev",
     "dev:api": "cd packages/api && npm run dev",
     "dev:dashboard": "cd packages/dashboard && npm run dev",
-    "dev": "concurrently \"npm run dev:bot\" \"npm run dev:api\" \"npm run dev:dashboard\"",
+    "dev": "concurrently --kill-others-on-fail \"npm run dev:bot\" \"npm run dev:api\" \"npm run dev:dashboard\"",
     "build": "npm run build --workspaces",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",

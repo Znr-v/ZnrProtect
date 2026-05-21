@@ -12,7 +12,7 @@ export async function onMessageCreate(ctx: BotContext, message: Message) {
     where: { guildId: message.guild.id },
   });
 
-  if (message.author.bot && !config?.scanBots) return;
+  
 
   const guildId = message.guild.id;
 

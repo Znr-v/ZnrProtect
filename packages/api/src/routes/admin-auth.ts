@@ -1,7 +1,7 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { getDiscordIdFromRequest, logAudit, DASHBOARD_PERMISSIONS, DashboardPermission } from "../lib/permissions";
 
-async function requireAdmin(request: FastifyInstance["request"], reply: FastifyInstance["reply"], prisma: any) {
+async function requireAdmin(request: FastifyRequest, reply: FastifyReply, prisma: any) {
   const discordId = await getDiscordIdFromRequest(request);
   if (!discordId) {
     return reply.status(401).send({ error: "Non authentifié" });

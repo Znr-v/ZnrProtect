@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon, Search, Filter, History } from "lucide-react";
+import { ArrowLeft, Shield, AlertTriangle, Users, Activity, Settings, X, Ban, Gavel, VolumeX, Volume2, CheckCircle, AlertCircle, Undo2, MessageSquare, ScrollText, User, Clock, Hash, AlertOctagon, Search, Filter, History, ChevronDown, Zap, Bot, Link as LinkIcon, Unlock } from "lucide-react";
 import { apiFetch, setAuthToken } from "@/lib/api";
 import { useDashboardUser } from "@/lib/usePermissions";
 import { MentionSearch } from "@/components/MentionSearch";
@@ -24,7 +24,7 @@ type GuildData = {
 
 type Incident = { id: string; title: string; severity: string; status: string; description?: string; createdAt: string; _count: { events: number; actions: number }; channelName?: string; events?: any[] };
 type Event = { id: string; type: string; severity: string; actorId: string; actorName?: string; channelId: string; channelName?: string; description: string; metadata: any; createdAt: string };
-type Member = { id: string; discordId: string; username: string; riskScore: number; quarantined: boolean; trusted: boolean; messageCount: number; warnCount: number; timedOutUntil?: string | null; avatar?: string | null; roleIds?: string[] };
+type Member = { id: string; discordId: string; username: string; riskScore: number; quarantined: boolean; trusted: boolean; messageCount: number; warnCount: number; timedOutUntil?: string | null; avatar?: string | null; roleIds?: string[]; isBot?: boolean };
 type BotActionLog = { id: string; action: string; targetId?: string; targetName?: string; moderatorId?: string; moderatorName?: string; reason?: string; details?: any; createdAt: string };
 
 type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config" | "roles";
@@ -32,7 +32,7 @@ type Tab = "overview" | "incidents" | "events" | "members" | "logs" | "config" |
 function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Member; onClose: () => void; logs: BotActionLog[]; guildId: string; onUpdate?: (m: Member) => void }) {
   const riskColor = member.riskScore >= 81 ? "text-red-400" : member.riskScore >= 61 ? "text-orange-400" : member.riskScore >= 31 ? "text-yellow-400" : "text-green-400";
   const isMuted = member.timedOutUntil && new Date(member.timedOutUntil) > new Date();
-  const [detailView, setDetailView] = useState<"overview" | "mutes" | "kicks" | "bans" | "warns" | "events" | "risk" | "messages" | "roles">("overview");
+  const [detailView, setDetailView] = useState<"overview" | "mutes" | "kicks" | "bans" | "warns" | "events" | "risk" | "messages" | "roles" | "quarantine">("overview");
   const [detailData, setDetailData] = useState<{ botLogs: BotActionLog[]; securityEvents: any[]; detectedLinks: any[]; riskScores: any; avatar?: string | null } | null>(null);
   const [messages, setMessages] = useState<any[] | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -79,7 +79,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
     setLoadingMessages(false);
   };
 
-  const handleViewChange = async (view: "overview" | "mutes" | "kicks" | "bans" | "events" | "risk" | "messages" | "roles") => {
+  const handleViewChange = async (view: "overview" | "mutes" | "kicks" | "bans" | "events" | "risk" | "messages" | "roles" | "quarantine") => {
     if (view !== "overview") await loadDetails();
     if (view === "messages") loadMessages();
     if (view === "roles") loadRoles(true);
@@ -89,6 +89,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
   const mutes = detailData?.botLogs.filter(l => l.action === "MUTE") || logs.filter(l => l.action === "MUTE");
   const bans = detailData?.botLogs.filter(l => l.action === "BAN") || logs.filter(l => l.action === "BAN");
   const kicks = detailData?.botLogs.filter(l => l.action === "KICK") || logs.filter(l => l.action === "KICK");
+  const quarantines = detailData?.botLogs.filter(l => l.action === "QUARANTINE" || l.action === "QUARANTINE_LIFT") || logs.filter(l => l.action === "QUARANTINE" || l.action === "QUARANTINE_LIFT");
 
   const formatDuration = (endDate: string) => {
     const remaining = new Date(endDate).getTime() - Date.now();
@@ -102,16 +103,16 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
   };
 
   const actionLabels: Record<string, string> = {
-    MUTE: "🔇 Mute", UNMUTE: "🔊 Mute retiré", BAN: "🚫 Banni", UNBAN: "✅ Débanni",
-    KICK: "👢 Exclu", TRUST_ADD: "✓ Fiable ajouté", TRUST_REMOVE: "✗ Fiable retiré",
-    QUARANTINE: "⚠️ Quarantaine", CONFIG_CHANGE: "⚙️ Config", LOCKDOWN_ON: "🔒 Lockdown",
-    ROLE_REMOVE: "🎭 Rôle retiré",
+    MUTE: "Mute", UNMUTE: "Mute retiré", BAN: "Banni", UNBAN: "Débanni",
+    KICK: "Exclu", TRUST_ADD: "Fiable ajouté", TRUST_REMOVE: "Fiable retiré",
+    QUARANTINE: "Quarantaine", QUARANTINE_LIFT: "Quarantaine levée", CONFIG_CHANGE: "Config", LOCKDOWN_ON: "Lockdown", LOCKDOWN_OFF: "Lockdown levé",
+    ROLE_REMOVE: "Rôle retiré",
   };
 
   const getActionIcon = (action: string) => {
     const icons: Record<string, string> = {
       MUTE: "🔇", UNMUTE: "🔊", BAN: "🚫", UNBAN: "✅", KICK: "👢",
-      TRUST_ADD: "✓", TRUST_REMOVE: "✗", QUARANTINE: "⚠️", LOCKDOWN_ON: "🔒", LOCKDOWN_OFF: "🔓",
+      TRUST_ADD: "✓", TRUST_REMOVE: "✗", QUARANTINE: "⚠️", QUARANTINE_LIFT: "✓", LOCKDOWN_ON: "🔒", LOCKDOWN_OFF: "🔓",
       ROLE_REMOVE: "🎭",
     };
     return icons[action] || "📋";
@@ -147,6 +148,10 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
             <p className="text-gray-400 text-xs">Bans</p>
             <p className={`font-bold text-lg ${bans.length > 0 ? "text-red-400" : ""}`}>{bans.length}</p>
           </button>
+          <button onClick={() => handleViewChange("quarantine")} className="bg-dark-700/30 hover:bg-dark-700 rounded-lg p-2 text-center transition">
+            <p className="text-gray-400 text-xs">Quarantaine</p>
+            <p className={`font-bold text-lg ${member.quarantined ? "text-orange-400" : "text-gray-500"}`}>{member.quarantined ? "Actif" : "0"}</p>
+          </button>
         </div>
       </div>
 
@@ -165,8 +170,8 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
             </button>
           ) : null}
           {member.quarantined && (
-            <span className="bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1">
-              <Ban className="w-3 h-3" /> Banni
+            <span className="bg-orange-500/20 text-orange-400 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1">
+              <Shield className="w-3 h-3" /> Quarantaine
             </span>
           )}
           {member.trusted && (
@@ -286,6 +291,49 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
             {ban.details?.roleName && <p className="text-xs text-gray-500 mt-1">Rôle au moment du ban: {ban.details.roleName}</p>}
           </div>
         ))
+      )}
+    </div>
+  );
+
+  const renderQuarantine = () => (
+    <div className="space-y-3">
+      <button onClick={() => setDetailView("overview")} className="text-sm text-theme-secondary hover:text-theme-primary flex items-center gap-1">
+        ← Retour
+      </button>
+      <h4 className="font-medium">Historique de la quarantaine</h4>
+      {quarantines.length === 0 && !member.quarantined ? (
+        <p className="text-gray-500 text-sm">Aucune action de quarantaine</p>
+      ) : (
+        <>
+          {member.quarantined && (
+            <div className="bg-orange-500/20 border border-orange-500/30 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4 text-orange-400" />
+                <span className="text-orange-400 font-medium">En quarantaine</span>
+              </div>
+              <p className="text-sm text-gray-400">
+                Rôle "Quarantaine" appliqué. Aucun message possible.
+              </p>
+              {member.trusted && (
+                <p className="text-xs text-gray-500 mt-2">Marqué comme fiable</p>
+              )}
+            </div>
+          )}
+          {quarantines.map((q) => (
+            <div key={q.id} className={`bg-dark-700/30 rounded-lg p-3 border-l-2 ${q.action === "QUARANTINE" ? "border-orange-500" : "border-green-500"}`}>
+              <div className="flex justify-between items-start mb-1">
+                <span className={`font-medium ${q.action === "QUARANTINE" ? "text-orange-400" : "text-green-400"}`}>
+                  {q.action === "QUARANTINE" ? "Quarantaine appliquée" : "Quarantaine levée"}
+                </span>
+                <span className="text-gray-500 text-xs">{new Date(q.createdAt).toLocaleString("fr-FR")}</span>
+              </div>
+              {q.reason && <p className="text-sm text-gray-400">{q.reason}</p>}
+              {q.details?.rolesRestored && (
+                <p className="text-xs text-gray-500 mt-1">{q.details.rolesRestored} rôles restaurés</p>
+              )}
+            </div>
+          ))}
+        </>
       )}
     </div>
   );
@@ -630,6 +678,7 @@ function MemberDetail({ member, onClose, logs, guildId, onUpdate }: { member: Me
       {detailView === "mutes" && renderMutes()}
       {detailView === "kicks" && renderKicks()}
       {detailView === "bans" && renderBans()}
+      {detailView === "quarantine" && renderQuarantine()}
       {detailView === "warns" && renderWarns()}
       {detailView === "risk" && renderRisk()}
       {detailView === "roles" && renderRoles()}
@@ -1432,13 +1481,16 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
   const [kickForm, setKickForm] = useState({ reason: "", sendDm: true });
   const [searchQuery, setSearchQuery] = useState("");
   const [showBannedOnly, setShowBannedOnly] = useState(false);
+  const [showQuarantinedOnly, setShowQuarantinedOnly] = useState(false);
   const [showBanHistory, setShowBanHistory] = useState(false);
   const [bannedHistory, setBannedHistory] = useState<{ discordId: string; username: string; reason?: string; bannedAt: string; unbannedAt?: string; unbannedBy?: string }[]>([]);
   const [bannedMembers, setBannedMembers] = useState<Member[]>([]);
+  const [quarantinedMembers, setQuarantinedMembers] = useState<Member[]>([]);
   const [historySearch, setHistorySearch] = useState("");
   const [historyFilter, setHistoryFilter] = useState<"all" | "banned" | "unbanned">("all");
   const [historyDateFilter, setHistoryDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [bannedSearch, setBannedSearch] = useState("");
+  const [quarantinedSearch, setQuarantinedSearch] = useState("");
   const [filterRoles, setFilterRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string; color: string }[]>([]);
   const [roleInput, setRoleInput] = useState("");
@@ -1447,6 +1499,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
   const loadMembers = () => {
     apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500`).then((d) => {
       if (setMembers) setMembers(d.members);
+      setQuarantinedMembers(d.members.filter((m: Member) => m.quarantined));
     });
     apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500&quarantined=true`).then((d) => {
       setBannedMembers(d.members);
@@ -1501,21 +1554,25 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
     setFilterRoles(filterRoles.filter(r => r.id !== roleId));
   };
 
-  const displayMembers = showBannedOnly ? bannedMembers : members;
-  const searchTerm = showBannedOnly ? bannedSearch : searchQuery;
-  const isBannedView = showBannedOnly;
+  const displayMembers = showBannedOnly ? bannedMembers : (showQuarantinedOnly ? quarantinedMembers : members);
+  const searchTerm = (showBannedOnly ? bannedSearch : (showQuarantinedOnly ? quarantinedSearch : searchQuery));
+  const isActionDisabled = showBannedOnly || showQuarantinedOnly;
+  const isQuarantinedView = showQuarantinedOnly;
   
   const filteredMembers = displayMembers.filter(m => {
     const matchesSearch = !searchTerm || m.username.toLowerCase().includes(searchTerm.toLowerCase());
     const memberRoleIds = m.roleIds || [];
     
-    // AND: le membre doit avoir TOUS les rôles sélectionnés (pas appliqué aux bannis)
-    const matchesRoles = showBannedOnly || filterRoles.length === 0 || filterRoles.every(r => memberRoleIds.includes(r.id));
+    // Filter by quarantine status
+    const matchesQuarantine = showQuarantinedOnly ? m.quarantined : true;
     
-    return matchesSearch && matchesRoles;
+    // AND: le membre doit avoir TOUS les rôles sélectionnés (pas appliqué aux bannis/quarantaine)
+    const matchesRoles = (showBannedOnly || showQuarantinedOnly) || filterRoles.length === 0 || filterRoles.every(r => memberRoleIds.includes(r.id));
+    
+    return matchesSearch && matchesRoles && matchesQuarantine;
   });
 
-  const doAction = async (discordId: string, action: "ban" | "kick" | "timeout" | "unban" | "unmute" | "trust", data?: any) => {
+  const doAction = async (discordId: string, action: "ban" | "kick" | "timeout" | "unban" | "unmute" | "trust" | "liftQuarantine", data?: any) => {
     setActionLoading(discordId + action);
     setActionResult(null);
     
@@ -1533,12 +1590,12 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
       }, ...prev]);
       apiFetch(`/api/logs/${guildId}`, {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           action: "BAN",
           targetId: discordId,
           targetName: member?.username || discordId,
           reason: data?.reason || "Banni depuis le dashboard",
-        }),
+        },
       });
     }
     
@@ -1551,11 +1608,11 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
       ));
       apiFetch(`/api/logs/${guildId}`, {
         method: "POST",
-        body: JSON.stringify({
+        body: {
           action: "UNBAN",
           targetId: discordId,
           targetName: member?.username || discordId,
-        }),
+        },
       });
     }
     
@@ -1580,6 +1637,8 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
         body = { reason: data.reason, sendDm: data.sendDm };
       } else if (action === "unban") {
         endpoint = `/api/guilds/${guildId}/members/${discordId}/unban`;
+      } else if (action === "liftQuarantine") {
+        endpoint = `/api/guilds/${guildId}/members/${discordId}/lift-quarantine`;
       } else {
         endpoint = `/api/guilds/${guildId}/members/${discordId}/${action}`;
       }
@@ -1591,7 +1650,8 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
         timeout: "Membre muted",
         unban: "Membre débanni",
         unmute: "Mute retiré",
-        trust: "Statut fiable modifié"
+        trust: "Statut fiable modifié",
+        liftQuarantine: "Quarantaine libérée"
       };
       const message = actionMessages[action] || "Action réussie";
       setActionResult({ id: discordId, success: true, message });
@@ -1634,14 +1694,14 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
       <>
         <div className="flex items-center gap-2 mb-4">
           <div className="flex-1 relative">
-            {showBannedOnly ? (
+            {(showBannedOnly || showQuarantinedOnly) ? (
               <>
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-muted" />
                 <input
                   type="text"
-                  placeholder="Rechercher dans les bannis..."
-                  value={bannedSearch}
-                  onChange={(e) => setBannedSearch(e.target.value)}
+                  placeholder={showQuarantinedOnly ? "Rechercher dans la quarantaine..." : "Rechercher dans les bannis..."}
+                  value={showQuarantinedOnly ? quarantinedSearch : bannedSearch}
+                  onChange={(e) => showQuarantinedOnly ? setQuarantinedSearch(e.target.value) : setBannedSearch(e.target.value)}
                   className="w-full bg-theme-tertiary border border-theme-border rounded-lg pl-9 pr-4 py-2.5 text-sm text-theme-primary placeholder-theme-muted focus:outline-none focus:border-discord transition-colors"
                 />
               </>
@@ -1655,13 +1715,19 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
             )}
           </div>
           <button
-          onClick={() => { setShowBannedOnly(!showBannedOnly); setShowBanHistory(false); }}
+          onClick={() => { setShowBannedOnly(!showBannedOnly); setShowBanHistory(false); setShowQuarantinedOnly(false); }}
           className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${showBannedOnly ? "bg-red-600 text-white" : "bg-dark-800 border border-dark-700 text-theme-secondary hover:text-theme-primary"}`}
         >
           {showBannedOnly ? "✓ Bannis" : "Bannis"}
         </button>
         <button
-          onClick={() => { setShowBanHistory(!showBanHistory); setShowBannedOnly(false); }}
+          onClick={() => { setShowQuarantinedOnly(!showQuarantinedOnly); setShowBannedOnly(false); setShowBanHistory(false); }}
+          className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${showQuarantinedOnly ? "bg-orange-600 text-white" : "bg-dark-800 border border-dark-700 text-theme-secondary hover:text-theme-primary"}`}
+        >
+          {showQuarantinedOnly ? "✓ Quarantaine" : "Quarantaine"}
+        </button>
+        <button
+          onClick={() => { setShowBanHistory(!showBanHistory); setShowBannedOnly(false); setShowQuarantinedOnly(false); }}
           className={`px-3 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-1.5 ${showBanHistory ? "bg-purple-600 text-white" : "bg-dark-800 border border-dark-700 text-theme-secondary hover:text-theme-primary"}`}
         >
           <History className="w-4 h-4" />
@@ -1842,7 +1908,12 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                   className={`border-b border-dark-700 hover:bg-dark-700/50 transition cursor-pointer ${selectedMember?.discordId === m.discordId ? "bg-dark-700/50" : ""}`}
                   onClick={() => onSelectMember?.(m)}
                 >
-                  <td className="py-3 px-4 text-sm font-medium">{m.username}</td>
+                  <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{m.username}</span>
+                        {m.isBot && <span className="bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full text-xs font-medium">🤖 BOT</span>}
+                      </div>
+                    </td>
                   <td className="py-3 px-4">
                     <span className={`font-bold text-sm ${riskColor}`}>{m.riskScore}</span>
                   </td>
@@ -1861,7 +1932,7 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                         </span>
                       );
                     })()}
-                    {m.quarantined && <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full text-xs mr-1">Banni</span>}
+                    {m.quarantined && <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full text-xs mr-1">Quarantaine</span>}
                     {m.trusted && <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full text-xs">Fiable</span>}
                   </td>
                   <td className="py-3 px-4">
@@ -1873,11 +1944,27 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                       )}
                       {!result && (
                         <div className="flex gap-1">
-                          {isMuted ? (
+{m.quarantined ? (
+                            <button
+                              onClick={() => doAction(m.discordId, "liftQuarantine")}
+                              disabled={loading || isActionDisabled}
+                              className={`group relative p-2 rounded-lg text-xs transition-all ${isActionDisabled ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-orange-600/80 hover:bg-orange-600 hover:scale-105"}`}
+                              title="Libérer de la quarantine"
+                            >
+                              {loading ? (
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <Unlock className="w-4 h-4" />
+                              )}
+                              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-dark-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap">
+                                Libérer
+                              </span>
+                            </button>
+                          ) : isMuted ? (
                             <button
                               onClick={() => doAction(m.discordId, "unmute", { sendDm: true })}
-                              disabled={loading || isBannedView}
-                              className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-green-600/80 hover:bg-green-600 hover:scale-105"}`}
+                              disabled={loading || isActionDisabled}
+                              className={`group relative p-2 rounded-lg text-xs transition-all ${isActionDisabled ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-green-600/80 hover:bg-green-600 hover:scale-105"}`}
                               title="Retirer le mute"
                             >
                               {loading ? (
@@ -1892,8 +1979,8 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                           ) : (
                             <button
                               onClick={() => { setMuteModal(m); setMuteForm({ duration: 5, reason: "", sendDm: true }); }}
-                              disabled={loading || isBannedView}
-                              className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-yellow-600/80 hover:bg-yellow-600 hover:scale-105"}`}
+                              disabled={loading || isActionDisabled}
+                              className={`group relative p-2 rounded-lg text-xs transition-all ${isActionDisabled ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-yellow-600/80 hover:bg-yellow-600 hover:scale-105"}`}
                               title="Mute"
                             >
                               {loading ? (
@@ -1908,8 +1995,8 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                           )}
                           <button
                             onClick={() => { setKickModal(m); setKickForm({ reason: "", sendDm: true }); }}
-                            disabled={loading || isBannedView}
-                            className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-orange-600/80 hover:bg-orange-600 hover:scale-105"}`}
+                            disabled={loading || isActionDisabled}
+                            className={`group relative p-2 rounded-lg text-xs transition-all ${isActionDisabled ? "bg-dark-700 text-gray-600 cursor-not-allowed" : "bg-orange-600/80 hover:bg-orange-600 hover:scale-105"}`}
                             title="Exclure"
                           >
                             {loading ? (
@@ -1923,18 +2010,18 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                           </button>
                           {m.quarantined ? (
                             <button
-                              onClick={() => doAction(m.discordId, "unban")}
+                              onClick={() => doAction(m.discordId, "liftQuarantine")}
                               disabled={loading}
                               className="group relative p-2 bg-green-600/80 hover:bg-green-600 rounded-lg text-xs transition-all hover:scale-105"
-                              title="Débannir"
+                              title="Libérer de la quarantaine"
                             >
                               {loading ? (
                                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                               ) : (
-                                <Undo2 className="w-4 h-4" />
+                                <Unlock className="w-4 h-4" />
                               )}
                               <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-dark-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap">
-                                Débannir
+                                Libérer
                               </span>
                             </button>
                           ) : (
@@ -1956,8 +2043,8 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
                           )}
                           <button
                             onClick={() => doAction(m.discordId, "trust", { trusted: !m.trusted })}
-                            disabled={loading || isBannedView}
-                            className={`group relative p-2 rounded-lg text-xs transition-all ${isBannedView ? "bg-dark-700 text-gray-600 cursor-not-allowed" : m.trusted ? "bg-green-600 hover:bg-green-500 hover:scale-105" : "bg-gray-600 hover:bg-gray-500 hover:scale-105"}`}
+                            disabled={loading || isActionDisabled}
+                            className={`group relative p-2 rounded-lg text-xs transition-all ${isActionDisabled ? "bg-dark-700 text-gray-600 cursor-not-allowed" : m.trusted ? "bg-green-600 hover:bg-green-500 hover:scale-105" : "bg-gray-600 hover:bg-gray-500 hover:scale-105"}`}
                             title={m.trusted ? "Retirer fiable" : "Marquer fiable"}
                           >
                             {loading ? (
@@ -2123,8 +2210,143 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
   );
 }
 
+function SectionCard({ id, title, icon, children, subSections, expandedSection, toggleSection }: { id: string; title: string; icon: React.ReactNode; children?: React.ReactNode; subSections?: { id: string; label: string; icon: React.ReactNode; content: React.ReactNode }[]; expandedSection: string; toggleSection: (section: string) => void }) {
+  const [expandedSubsection, setExpandedSubsection] = useState<string | null>(null);
+
+  if (subSections) {
+    return (
+      <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
+        <button
+          onClick={() => toggleSection(id)}
+          className="w-full p-4 flex justify-between items-center hover:bg-dark-700/30 transition"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">{icon}</span>
+            <h3 className="font-semibold">{title}</h3>
+          </div>
+          <span className={`transform transition-transform ${expandedSection === id ? "rotate-180" : ""}`}>▼</span>
+        </button>
+        {expandedSection === id && (
+          <div className="px-5 pb-5 border-t border-dark-700 pt-4 space-y-2">
+            {subSections.map(sub => (
+              <div key={sub.id} className="bg-dark-900/30 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setExpandedSubsection(expandedSubsection === sub.id ? null : sub.id)}
+                  className="w-full p-3 flex justify-between items-center hover:bg-dark-700/30 transition"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{sub.icon}</span>
+                    <span className="text-sm font-medium">{sub.label}</span>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transform transition-transform ${expandedSubsection === sub.id ? "rotate-180" : ""}`} />
+                </button>
+                {expandedSubsection === sub.id && (
+                  <div className="px-4 pb-4 pt-2 space-y-4">
+                    {sub.content}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
+      <button
+        onClick={() => toggleSection(id)}
+        className="w-full p-4 flex justify-between items-center hover:bg-dark-700/30 transition"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">{icon}</span>
+          <h3 className="font-semibold">{title}</h3>
+        </div>
+        <span className={`transform transition-transform ${expandedSection === id ? "rotate-180" : ""}`}>▼</span>
+      </button>
+      {expandedSection === id && (
+        <div className="px-5 pb-5 border-t border-dark-700 pt-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SanctionSelector({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) {
+  return (
+    <div className="bg-dark-900/50 rounded-lg p-4">
+      {label && <label className="text-xs text-gray-500 block mb-2">{label}</label>}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { value: "TIMEOUT", label: "Timeout", icon: Clock, color: "blue" },
+          { value: "KICK", label: "Exclure", icon: X, color: "orange" },
+          { value: "BAN", label: "Bannir", icon: Ban, color: "red" },
+          { value: "QUARANTINE", label: "Quarantaine", icon: Shield, color: "purple" },
+        ].map(opt => {
+          const IconComp = opt.icon;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => onChange(opt.value)}
+              className={`py-2.5 px-3 rounded-lg font-medium text-sm transition flex flex-col items-center gap-1 ${
+                value === opt.value
+                  ? opt.color === "blue" ? "bg-blue-600 text-white"
+                    : opt.color === "orange" ? "bg-orange-600 text-white"
+                      : opt.color === "red" ? "bg-red-600 text-white"
+                        : "bg-purple-600 text-white"
+                  : "bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600"
+              }`}
+            >
+              <IconComp className="w-4 h-4" />
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BotSanctionSelector({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) {
+  return (
+    <div className="bg-dark-900/50 rounded-lg p-4">
+      {label && <label className="text-xs text-gray-500 block mb-2">{label}</label>}
+      <div className="grid grid-cols-2 gap-2">
+        {[
+          { value: "KICK", label: "Exclure", icon: X, color: "orange" },
+          { value: "BAN", label: "Bannir", icon: Ban, color: "red" },
+        ].map(opt => {
+          const IconComp = opt.icon;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => onChange(opt.value)}
+              className={`py-2.5 px-3 rounded-lg font-medium text-sm transition flex items-center justify-center gap-2 ${
+                value === opt.value
+                  ? opt.color === "orange" ? "bg-orange-600 text-white"
+                    : "bg-red-600 text-white"
+                  : "bg-dark-700 text-gray-400 hover:text-white hover:bg-dark-600"
+              }`}
+            >
+              <IconComp className="w-4 h-4" />
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ConfigTab({ guild, config, onUpdate }: { guild: GuildData["guild"]; config: any; onUpdate: () => void }) {
   const [loading, setLoading] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string>("general");
+
+  const toggleSection = (section: string) => {
+    setExpandedSection(expandedSection === section ? "" : section);
+  };
 
   const toggleConfig = async (key: string, value: boolean) => {
     setLoading(key);
@@ -2136,7 +2358,7 @@ function ConfigTab({ guild, config, onUpdate }: { guild: GuildData["guild"]; con
     setLoading(null);
   };
 
-  const updateValue = async (key: string, value: number) => {
+  const updateValue = async (key: string, value: number | string) => {
     await apiFetch(`/api/config/${guild.id}`, {
       method: "PATCH",
       body: { [key]: value },
@@ -2148,206 +2370,341 @@ function ConfigTab({ guild, config, onUpdate }: { guild: GuildData["guild"]; con
 
   return (
     <div className="space-y-4">
-      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
-        <h3 className="font-semibold mb-4">🛡️ Anti-Raid</h3>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Seuil de joins</span>
-            <input
-              type="number"
-              value={config.raidJoinThreshold}
-              onChange={(e) => updateValue("raidJoinThreshold", parseInt(e.target.value))}
-              className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-20 text-right"
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Fenetre (secondes)</span>
-            <input
-              type="number"
-              value={config.raidJoinWindow}
-              onChange={(e) => updateValue("raidJoinWindow", parseInt(e.target.value))}
-              className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-20 text-right"
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Auto-lockdown</span>
+      <SectionCard id="general" icon={<Settings className="w-5 h-5" />} title="Configuration Générale" expandedSection={expandedSection} toggleSection={toggleSection}>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
+            <div>
+              <p className="text-sm font-medium">Scan Bots</p>
+              <p className="text-xs text-gray-500">Appliquer l'anti-spam sur les comptes bots</p>
+            </div>
             <button
-              onClick={() => toggleConfig("raidAutoLockdown", !config.raidAutoLockdown)}
-              disabled={loading === "raidAutoLockdown"}
-              className={`w-12 h-6 rounded-full transition ${config.raidAutoLockdown ? "bg-green-500" : "bg-dark-600"}`}
+              onClick={() => toggleConfig("scanBots", !config.scanBots)}
+              disabled={loading === "scanBots"}
+              className={`w-14 h-7 rounded-full transition relative ${config.scanBots ? "bg-green-500" : "bg-dark-600"}`}
             >
-              <div className={`w-5 h-5 bg-white rounded-full transition ${config.raidAutoLockdown ? "translate-x-6" : "translate-x-0.5"}`} />
+              <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.scanBots ? "translate-x-7" : "translate-x-0.5"}`} />
             </button>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Age min compte (jours)</span>
-            <input
-              type="number"
-              value={config.raidMinAccountAge}
-              onChange={(e) => updateValue("raidMinAccountAge", parseInt(e.target.value))}
-              className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-20 text-right"
-            />
+          <div className="bg-dark-900/50 rounded-lg p-4">
+            <label className="text-xs text-gray-500 block mb-2">Durée par défaut du Timeout</label>
+            <select
+              value={config.defaultTimeoutMinutes || 5}
+              onChange={(e) => updateValue("defaultTimeoutMinutes", parseInt(e.target.value))}
+              className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2"
+            >
+              <option value="1">1 minute</option>
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">1 heure</option>
+              <option value="1440">24 heures</option>
+              <option value="10080">7 jours</option>
+            </select>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
-        <h3 className="font-semibold mb-4">📢 Anti-Spam</h3>
+      <SectionCard id="antiraid" icon={<Shield className="w-5 h-5" />} title="Protection Raid" expandedSection={expandedSection} toggleSection={toggleSection} subSections={[
+          {
+            id: "massjoin",
+            label: "Anti Mass Join",
+            icon: <Users className="w-4 h-4" />,
+            content: <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-dark-900/50 rounded-lg p-4">
+                  <label className="text-xs text-gray-500 block mb-2">Seuil de joins</label>
+                  <input
+                    type="number"
+                    value={config.raidJoinThreshold || 5}
+                    onChange={(e) => updateValue("raidJoinThreshold", parseInt(e.target.value))}
+                    className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+                  />
+                </div>
+                <div className="bg-dark-900/50 rounded-lg p-4">
+                  <label className="text-xs text-gray-500 block mb-2">Fenêtre (secondes)</label>
+                  <input
+                    type="number"
+                    value={config.raidJoinWindow || 10}
+                    onChange={(e) => updateValue("raidJoinWindow", parseInt(e.target.value))}
+                    className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+                  />
+                </div>
+              </div>
+              <div className="bg-dark-900/50 rounded-lg p-4">
+                <label className="text-xs text-gray-500 block mb-2">Age minimum du compte (jours)</label>
+                <input
+                  type="number"
+                  value={config.raidMinAccountAge || 0}
+                  onChange={(e) => updateValue("raidMinAccountAge", parseInt(e.target.value))}
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+                />
+              </div>
+              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
+                <div>
+                  <p className="text-sm font-medium">Auto-lockdown</p>
+                  <p className="text-xs text-gray-500">Verrouiller tous les salons en cas de raid détecté</p>
+                </div>
+                <button
+                  onClick={() => toggleConfig("raidAutoLockdown", !config.raidAutoLockdown)}
+                  disabled={loading === "raidAutoLockdown"}
+                  className={`w-14 h-7 rounded-full transition relative ${config.raidAutoLockdown ? "bg-green-500" : "bg-dark-600"}`}
+                >
+                  <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.raidAutoLockdown ? "translate-x-7" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+              <SanctionSelector
+                value={config.raidSanction || "BAN"}
+                onChange={(v) => updateValue("raidSanction", v)}
+                label="Sanction"
+              />
+            </>
+          },
+          {
+            id: "antibotspam",
+            label: "Anti Spam Bot",
+            icon: <Bot className="w-4 h-4" />,
+            content: <>
+              <div className="bg-dark-900/50 rounded-lg p-4 border border-orange-500/30">
+                <p className="text-sm font-medium text-orange-400 mb-1">Protection contre les bots spammeurs</p>
+                <p className="text-xs text-gray-500">Seuils plus bas pour détecter rapidement les bots</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-3">Détection de spam bot</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-dark-900/50 rounded-lg p-4">
+                    <label className="text-xs text-gray-500 block mb-2">Max msgs / 1s</label>
+                    <input
+                      type="number"
+                      value={config.botSpamMaxMessages ?? 3}
+                      onChange={(e) => updateValue("botSpamMaxMessages", parseInt(e.target.value))}
+                      className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+                    />
+                  </div>
+                  <div className="bg-dark-900/50 rounded-lg p-4">
+                    <label className="text-xs text-gray-500 block mb-2">Max msgs / 5s</label>
+                    <input
+                      type="number"
+                      value={config.botSpamMaxMessages5s ?? 5}
+                      onChange={(e) => updateValue("botSpamMaxMessages5s", parseInt(e.target.value))}
+                      className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="bg-dark-900/50 rounded-lg p-4">
+                <label className="text-xs text-gray-500 block mb-2">Min salons différents en 5s (cross-channel)</label>
+                <input
+                  type="number"
+                  value={config.botSpamCrossChannel ?? 2}
+                  onChange={(e) => updateValue("botSpamCrossChannel", parseInt(e.target.value))}
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+                />
+              </div>
+              <BotSanctionSelector
+                value={config.botSpamSanction || "KICK"}
+                onChange={(v) => updateValue("botSpamSanction", v)}
+                label="Sanction"
+              />
+            </>
+          }
+        ]} />
+
+      <SectionCard id="antispam" icon={<Volume2 className="w-5 h-5" />} title="Anti-Spam" expandedSection={expandedSection} toggleSection={toggleSection}>
         <div className="space-y-4">
           <div>
-            <p className="text-xs text-gray-500 mb-2">Détection de flood (messages rapides)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
-                <span className="text-gray-400 text-sm">Max messages / 1s</span>
+            <p className="text-sm font-medium mb-3">Détection de flood</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-dark-900/50 rounded-lg p-4">
+                <label className="text-xs text-gray-500 block mb-2">Max messages / 1s</label>
                 <input
                   type="number"
-                  value={config.spamMaxMessages}
+                  value={config.spamMaxMessages || 5}
                   onChange={(e) => updateValue("spamMaxMessages", parseInt(e.target.value))}
-                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
                 />
               </div>
-              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
-                <span className="text-gray-400 text-sm">Max messages / 10s</span>
+              <div className="bg-dark-900/50 rounded-lg p-4">
+                <label className="text-xs text-gray-500 block mb-2">Max messages / 10s</label>
                 <input
                   type="number"
-                  value={config.spamMaxMessages10s || 8}
+                  value={config.spamMaxMessages10s || 10}
                   onChange={(e) => updateValue("spamMaxMessages10s", parseInt(e.target.value))}
-                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
                 />
               </div>
             </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-2">Détection de répétition</p>
-            <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
-              <span className="text-gray-400 text-sm">Messages identiques avant sanction</span>
-              <input
-                type="number"
-                value={config.spamRepeatThreshold || 3}
-                onChange={(e) => updateValue("spamRepeatThreshold", parseInt(e.target.value))}
-                className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
-              />
-            </div>
+          <div className="bg-dark-900/50 rounded-lg p-4">
+            <label className="text-xs text-gray-500 block mb-2">Messages identiques avant sanction</label>
+            <input
+              type="number"
+              value={config.spamRepeatThreshold || 3}
+              onChange={(e) => updateValue("spamRepeatThreshold", parseInt(e.target.value))}
+              className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+            />
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-2">Détection de mentions</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
-                <span className="text-gray-400 text-sm">Max mentions / message</span>
+            <p className="text-sm font-medium mb-3">Détection de mentions excessives</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-dark-900/50 rounded-lg p-4">
+                <label className="text-xs text-gray-500 block mb-2">Max mentions / message</label>
                 <input
                   type="number"
-                  value={config.spamMaxMentions}
+                  value={config.spamMaxMentions || 5}
                   onChange={(e) => updateValue("spamMaxMentions", parseInt(e.target.value))}
-                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
                 />
               </div>
-              <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
-                <span className="text-gray-400 text-sm">Max mentions / 10s</span>
+              <div className="bg-dark-900/50 rounded-lg p-4">
+                <label className="text-xs text-gray-500 block mb-2">Max mentions / 10s</label>
                 <input
                   type="number"
-                  value={config.spamMaxMentions10s || 5}
+                  value={config.spamMaxMentions10s || 10}
                   onChange={(e) => updateValue("spamMaxMentions10s", parseInt(e.target.value))}
-                  className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
+                  className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
                 />
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
-        <h3 className="font-semibold mb-4">⚖️ Sanctions</h3>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
-            <div>
-              <p className="text-sm font-medium">Durée du mute anti-spam</p>
-              <p className="text-xs text-gray-500">Durée automatique quand le bot mute pour spam</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={config.spamMuteDuration || 5}
-                onChange={(e) => updateValue("spamMuteDuration", parseInt(e.target.value))}
-                className="bg-dark-900 border border-dark-700 rounded px-2 py-1 w-16 text-right text-sm"
-              />
-              <span className="text-gray-400 text-sm">min</span>
-            </div>
-          </div>
-          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-3">
+          <SanctionSelector
+            value={config.spamSanction || "TIMEOUT"}
+            onChange={(v) => updateValue("spamSanction", v)}
+            label="Sanction"
+          />
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
             <div>
               <p className="text-sm font-medium">Suppression des messages</p>
-              <p className="text-xs text-gray-500">Supprimer les messages du spammeur automatiquement</p>
+              <p className="text-xs text-gray-500">Supprimer automatiquement les messages de spam</p>
             </div>
             <button
               onClick={() => toggleConfig("spamAutoDelete", config.spamAutoDelete !== false)}
               disabled={loading === "spamAutoDelete"}
-              className={`w-12 h-6 rounded-full transition ${config.spamAutoDelete !== false ? "bg-green-500" : "bg-dark-600"}`}
+              className={`w-14 h-7 rounded-full transition relative ${config.spamAutoDelete !== false ? "bg-green-500" : "bg-dark-600"}`}
             >
-              <div className={`w-5 h-5 bg-white rounded-full transition ${config.spamAutoDelete !== false ? "translate-x-6" : "translate-x-0.5"}`} />
+              <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.spamAutoDelete !== false ? "translate-x-7" : "translate-x-0.5"}`} />
             </button>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
-        <h3 className="font-semibold mb-4">🔗 Anti-Phishing</h3>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Active</span>
+      <SectionCard id="antiphishing" icon={<LinkIcon className="w-5 h-5" />} title="Anti-Phishing" expandedSection={expandedSection} toggleSection={toggleSection}>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
+            <div>
+              <p className="text-sm font-medium">Protection anti-hameçonnage</p>
+              <p className="text-xs text-gray-500">Détecte et supprime les liens malveillants</p>
+            </div>
             <button
               onClick={() => toggleConfig("phishingEnabled", !config.phishingEnabled)}
               disabled={loading === "phishingEnabled"}
-              className={`w-12 h-6 rounded-full transition ${config.phishingEnabled ? "bg-green-500" : "bg-dark-600"}`}
+              className={`w-14 h-7 rounded-full transition relative ${config.phishingEnabled ? "bg-green-500" : "bg-dark-600"}`}
             >
-              <div className={`w-5 h-5 bg-white rounded-full transition ${config.phishingEnabled ? "translate-x-6" : "translate-x-0.5"}`} />
+              <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.phishingEnabled ? "translate-x-7" : "translate-x-0.5"}`} />
             </button>
           </div>
+          <SanctionSelector
+            value={config.phishingSanction || "QUARANTINE"}
+            onChange={(v) => updateValue("phishingSanction", v)}
+            label="Sanction"
+          />
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
-        <h3 className="font-semibold mb-4">🔐 Secret Scanner</h3>
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400">Scan active</span>
-          <button
-            onClick={() => toggleConfig("secretScanEnabled", !config.secretScanEnabled)}
-            disabled={loading === "secretScanEnabled"}
-            className={`w-12 h-6 rounded-full transition ${config.secretScanEnabled ? "bg-green-500" : "bg-dark-600"}`}
-          >
-            <div className={`w-5 h-5 bg-white rounded-full transition ${config.secretScanEnabled ? "translate-x-6" : "translate-x-0.5"}`} />
-          </button>
+      <SectionCard id="secrets" icon={<AlertOctagon className="w-5 h-5" />} title="Secret Scanner" expandedSection={expandedSection} toggleSection={toggleSection}>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
+            <div>
+              <p className="text-sm font-medium">Scan des secrets</p>
+              <p className="text-xs text-gray-500">Détecte les tokens, clés API et secrets exposés</p>
+            </div>
+            <button
+              onClick={() => toggleConfig("secretScanEnabled", !config.secretScanEnabled)}
+              disabled={loading === "secretScanEnabled"}
+              className={`w-14 h-7 rounded-full transition relative ${config.secretScanEnabled ? "bg-green-500" : "bg-dark-600"}`}
+            >
+              <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.secretScanEnabled ? "translate-x-7" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+          <SanctionSelector
+            value={config.secretSanction || "QUARANTINE"}
+            onChange={(v) => updateValue("secretSanction", v)}
+            label="Sanction"
+          />
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
-        <h3 className="font-semibold mb-4">🔒 Quarantaine</h3>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400">Active</span>
+      <SectionCard id="quarantine" icon={<Shield className="w-5 h-5" />} title="Quarantaine" expandedSection={expandedSection} toggleSection={toggleSection}>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
+            <div>
+              <p className="text-sm font-medium">Mode quarantaine</p>
+              <p className="text-xs text-gray-500">Isole les membres suspects - rôles sauvegardés</p>
+            </div>
             <button
               onClick={() => toggleConfig("quarantineEnabled", !config.quarantineEnabled)}
               disabled={loading === "quarantineEnabled"}
-              className={`w-12 h-6 rounded-full transition ${config.quarantineEnabled ? "bg-green-500" : "bg-dark-600"}`}
+              className={`w-14 h-7 rounded-full transition relative ${config.quarantineEnabled ? "bg-green-500" : "bg-dark-600"}`}
             >
-              <div className={`w-5 h-5 bg-white rounded-full transition ${config.quarantineEnabled ? "translate-x-6" : "translate-x-0.5"}`} />
+              <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.quarantineEnabled ? "translate-x-7" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-dark-900/50 rounded-lg p-4">
+              <label className="text-xs text-gray-500 block mb-2">Score minimum</label>
+              <input
+                type="number"
+                value={config.quarantineMinScore || 61}
+                onChange={(e) => updateValue("quarantineMinScore", parseInt(e.target.value))}
+                className="w-full bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-center"
+                min="1"
+                max="100"
+              />
+            </div>
+            <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
+              <div>
+                <p className="text-sm font-medium">Auto à l'arrivée</p>
+                <p className="text-xs text-gray-500">Quarantaine auto sur nouveaux membres</p>
+              </div>
+              <button
+                onClick={() => toggleConfig("quarantineAutoOnJoin", !config.quarantineAutoOnJoin)}
+                disabled={loading === "quarantineAutoOnJoin"}
+                className={`w-14 h-7 rounded-full transition relative ${config.quarantineAutoOnJoin ? "bg-green-500" : "bg-dark-600"}`}
+              >
+                <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.quarantineAutoOnJoin ? "translate-x-7" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+          </div>
+          <div className="bg-dark-900/50 rounded-lg p-4">
+            <p className="text-sm font-medium mb-1">Fonctionnement</p>
+            <ul className="text-xs text-gray-400 space-y-1 mt-2">
+              <li>- Score &gt;= {String(config.quarantineMinScore || 61)} = quarantine auto</li>
+              <li>- Rôles actuels sauvegardés automatiquement</li>
+              <li>- Tous les rôles retirés du membre</li>
+              <li>- Rôle "Quarantaine" créé si absent</li>
+              <li>- Aucune permission (lecture seule)</li>
+              <li>- Libérer restaure les rôles originaux</li>
+            </ul>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard id="emergency" icon={<Zap className="w-5 h-5" />} title="Bouton d'Urgence" expandedSection={expandedSection} toggleSection={toggleSection}>
+        <div className="space-y-4">
+          <div className="flex justify-between items-center bg-dark-900/50 rounded-lg p-4">
+            <div>
+              <p className="text-sm font-medium">Mode urgence activé</p>
+              <p className="text-xs text-gray-500">Permet un verrouillage rapide du serveur</p>
+            </div>
+            <button
+              onClick={() => toggleConfig("emergencyEnabled", !config.emergencyEnabled)}
+              disabled={loading === "emergencyEnabled"}
+              className={`w-14 h-7 rounded-full transition relative ${config.emergencyEnabled ? "bg-red-500" : "bg-dark-600"}`}
+            >
+              <div className={`w-6 h-6 bg-white rounded-full transition absolute top-0.5 ${config.emergencyEnabled ? "translate-x-7" : "translate-x-0.5"}`} />
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="bg-dark-800 rounded-xl p-5 border border-dark-700">
-        <h3 className="font-semibold mb-4">🤖 Scan Bots</h3>
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400">Scanner les bots</span>
-          <button
-            onClick={() => toggleConfig("scanBots", !config.scanBots)}
-            disabled={loading === "scanBots"}
-            className={`w-12 h-6 rounded-full transition ${config.scanBots ? "bg-green-500" : "bg-dark-600"}`}
-          >
-            <div className={`w-5 h-5 bg-white rounded-full transition ${config.scanBots ? "translate-x-6" : "translate-x-0.5"}`} />
-          </button>
-        </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

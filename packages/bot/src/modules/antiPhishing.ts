@@ -1,6 +1,9 @@
 import { Message } from "discord.js";
+import { ActionType } from "@prisma/client";
 import { BotContext } from "../index";
 import { logBotAction } from "../lib/botLogs";
+import { detectBot } from "../services/bot-detector";
+import { executeSanction } from "../services/quarantine";
 
 // Known phishing target domains
 const LEGIT_DOMAINS = [
@@ -40,30 +43,30 @@ export async function checkPhishing(ctx: BotContext, message: Message) {
     const result = analyzeUrl(url);
     if (!result.suspicious) continue;
 
+    const isBot = message.author.bot;
+
     // Delete message
     try {
       await message.delete();
     } catch {}
 
-    // Quarantine user
-    if (config.quarantineEnabled && config.quarantineRoleId) {
-      try {
-        const member = message.member;
-        const role = message.guild.roles.cache.get(config.quarantineRoleId);
-        if (member && role) {
-          await member.roles.add(role, "Lien de phishing détecté");
-          await ctx.prisma.member.updateMany({
-            where: { discordId: message.author.id, guildId: message.guild.id },
-            data: { quarantined: true },
-          });
-          await logBotAction(ctx.prisma, message.guild.id, "QUARANTINE", {
-            targetId: message.author.id,
-            targetName: message.author.tag,
-            reason: "Lien de phishing détecté",
-            details: { url, domain: result.domain },
-          });
+    // Handle based on config
+    const phishingConfig = await ctx.prisma.guildConfig.findUnique({ where: { guildId: message.guild.id } });
+    const phishingSanction = (phishingConfig?.phishingSanction as ActionType) || "QUARANTINE";
+    
+    try {
+      const member = await message.guild.members.fetch(message.author.id).catch(() => null);
+      if (member) {
+        if (message.author.bot && (phishingConfig?.scanBots ?? false)) {
+          // Bot detected, use phishing sanction
+          await executeSanction(ctx, member, phishingSanction, `Anti-phishing: lien suspect (${result.domain})`, phishingConfig?.defaultTimeoutMinutes);
+        } else if (!message.author.bot) {
+          // Regular user, apply configured sanction
+          await executeSanction(ctx, member, phishingSanction, `Anti-phishing: lien suspect (${result.domain})`, phishingConfig?.defaultTimeoutMinutes);
         }
-      } catch {}
+      }
+    } catch (e) {
+      console.log(`[PHISHING] ❌ Sanction failed: ${e}`);
     }
 
     // Alert author

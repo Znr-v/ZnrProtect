@@ -1,11 +1,11 @@
-import { TextChannel, NewsChannel } from "discord.js";
+import { TextChannel, NewsChannel, GuildChannel } from "discord.js";
 import { BotContext } from "../index";
 
 export async function onWebhooksUpdate(
   ctx: BotContext,
-  channel: TextChannel | NewsChannel
+  channel: GuildChannel
 ) {
-  if (!channel.guild) return;
+  if (!channel.guild || !channel.isTextBased()) return;
 
   try {
     const webhooks = await channel.fetchWebhooks();
@@ -31,6 +31,6 @@ export async function onWebhooksUpdate(
       });
     }
   } catch (err) {
-    console.error(`[!] Webhook sync failed for #${channel.name}:`, err);
+    console.error(`[!] Webhook sync failed for #${"name" in channel ? channel.name : "unknown"}:`, err);
   }
 }

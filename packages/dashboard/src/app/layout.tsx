@@ -6,7 +6,7 @@ import { Navbar } from "@/components/Navbar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Security Bot — Dashboard",
+  title: "ZnrProtect — Dashboard",
   description: "Dashboard de sécurité Discord",
 };
 

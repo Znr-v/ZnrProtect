@@ -21,7 +21,7 @@ export async function authRoutes(app: FastifyInstance) {
         redirect_uri: `${process.env.NEXTAUTH_URL}/api/auth/callback/discord`,
       }),
     });
-    const tokenData = await tokenRes.json();
+    const tokenData = await tokenRes.json() as { access_token?: string; token_type?: string; expires_in?: number; refresh_token?: string };
 
     if (!tokenData.access_token) {
       return reply.status(401).send({ error: "Token invalide" });
@@ -31,7 +31,7 @@ export async function authRoutes(app: FastifyInstance) {
     const userRes = await fetch(`${DISCORD_API}/users/@me`, {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
-    const user = await userRes.json();
+    const user = await userRes.json() as { id: string; username: string; avatar: string | null; global_name?: string };
 
     // Get guilds
     const guildsRes = await fetch(`${DISCORD_API}/users/@me/guilds`, {
