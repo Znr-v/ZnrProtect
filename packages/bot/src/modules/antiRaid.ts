@@ -62,6 +62,9 @@ export async function evaluateRaidScore(
       guildId: guild.id,
       title: `Raid détecté — Score: ${raidScore}`,
       severity: raidScore >= 80 ? "CRITICAL" : "HIGH",
+      status: "RESOLVED",
+      resolvedAt: new Date(),
+      resolvedBy: "bot",
       description: `${recentJoins.length} joins en ${config.raidJoinWindow}s, ${youngAccounts.length} comptes récents, ${namePairs.size} noms similaires`,
     },
   });
