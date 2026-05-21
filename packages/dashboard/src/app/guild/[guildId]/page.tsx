@@ -1501,8 +1501,8 @@ function MembersTab({ members, guildId, onRefresh, setMembers, selectedMember, o
       if (setMembers) setMembers(d.members);
       setQuarantinedMembers(d.members.filter((m: Member) => m.quarantined));
     });
-    apiFetch<{ members: Member[] }>(`/api/members/${guildId}?sort=riskScore&order=desc&limit=500&quarantined=true`).then((d) => {
-      setBannedMembers(d.members);
+    apiFetch<{ members: any[] }>(`/api/members/${guildId}/bans`).then((d) => {
+      setBannedMembers(d.members || []);
     });
     apiFetch<{ history: any[] }>(`/api/logs/${guildId}/ban-history`).then((d) => {
       const formatted = d.history.map((h: any) => ({

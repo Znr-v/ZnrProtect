@@ -153,6 +153,44 @@ export async function memberRoutes(app: FastifyInstance) {
     }
   });
 
+  // Get Discord ban list
+  app.get("/:guildId/bans", async (request, reply) => {
+    const { guildId } = request.params as { guildId: string };
+    const discordId = await getDiscordIdFromRequest(request);
+    const prisma = (request as any).prisma;
+    await requireGuildAccess(prisma, discordId ?? undefined, guildId);
+
+    const client = (request as any).client;
+
+    try {
+      if (!client) return reply.status(500).send({ error: "Client Discord non connecté" });
+      const guild = await client.guilds.fetch(guildId);
+      if (!guild) return reply.status(404).send({ error: "Serveur introuvable" });
+
+      const bans = await guild.bans.fetch();
+      const members = bans.map((ban: any) => ({
+        id: ban.user.id,
+        discordId: ban.user.id,
+        username: ban.user.tag,
+        riskScore: 100,
+        quarantined: false,
+        trusted: false,
+        messageCount: 0,
+        warnCount: 0,
+        avatar: ban.user.avatar
+          ? `https://cdn.discordapp.com/avatars/${ban.user.id}/${ban.user.avatar}.${ban.user.avatar.startsWith("a_") ? "gif" : "png"}`
+          : `https://cdn.discordapp.com/embed/avatars/${Number(ban.user.discriminator) % 5}.png`,
+        reason: ban.reason,
+        isBot: ban.user.bot,
+      }));
+
+      return { members, total: members.length };
+    } catch (e: any) {
+      console.error("Get bans error:", e);
+      return reply.status(500).send({ error: e.message });
+    }
+  });
+
   // List members for a guild (with risk filtering)
   app.get("/:guildId", async (request) => {
     const { guildId } = request.params as { guildId: string };
